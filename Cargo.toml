@@ -9,6 +9,6 @@ description = "Little game for the purpose of learning `shipyard` in a full prod
 
 [dependencies]
 ggez = { git = "https://github.com/ggez/ggez.git" }
-shipyard = { git = "https://github.com/leudz/shipyard.git" }
+shipyard = { git = "https://github.com/leudz/shipyard.git", features = ["std", "panic", "parallel", "serde", "non_send", "non_sync"] }
 anyhow = "1.0.31"
 thiserror = "1.0.20"

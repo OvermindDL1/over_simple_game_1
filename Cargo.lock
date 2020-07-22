@@ -1950,6 +1950,7 @@ dependencies = [
  "num_cpus",
  "parking_lot 0.10.2",
  "rayon",
+ "serde",
 ]
 
 [[package]]

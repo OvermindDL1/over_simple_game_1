@@ -1,3 +1,6 @@
+# A whitelisting .gitignore file
+# Can see what's ignored by this with:  git status --ignored
+
 # Blacklist everything by default
 *
 
