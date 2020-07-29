@@ -197,7 +197,7 @@ impl GameState {
 			screen_tiles: 2.0,
 			zoom: 2.0,
 			scale: Point2::from([1.0, 6.0 / 7.0]),
-			view_center: Point2::from([0.0, 0.0]),
+			view_center: Point2::from([3.0, 2.0]),
 			aspect_ratio: 1.0,
 			tiles_image: None,
 			tiles_mesh: None,
