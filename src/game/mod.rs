@@ -1,70 +1,20 @@
+use std::convert::Infallible;
+use std::fmt;
+use std::path::PathBuf;
+
 use anyhow::Context as AnyContext;
+use ggez::conf::{FullscreenType, NumSamples, WindowMode, WindowSetup};
 use ggez::graphics::{Color, DrawParam, Drawable, FilterMode, Rect, Vertex};
 use ggez::input::{keyboard, mouse};
+use ggez::nalgebra::Point2;
 use ggez::{graphics, Context, ContextBuilder, GameError};
 use winit::{
 	dpi, ElementState, Event, KeyboardInput, ModifiersState, MouseButton, MouseScrollDelta,
 	VirtualKeyCode, WindowEvent,
 };
 
-use ggez::conf::{FullscreenType, NumSamples, WindowMode, WindowSetup};
-use ggez::nalgebra::Point2;
+use over_simple_game_1::core::map::generator::SimpleAlternationMapGenerator;
 use over_simple_game_1::prelude::*;
-use over_simple_game_1::TileType;
-use serde::{Deserialize, Serialize};
-use std::convert::Infallible;
-use std::fmt;
-use std::path::PathBuf;
-
-// mod point2_de_serialize {
-// 	use ggez::nalgebra::Point2;
-// 	use serde::de::Visitor;
-// 	use serde::ser::SerializeTuple;
-// 	use serde::{Deserializer, Serializer};
-//
-// 	pub fn serialize<S>(point: &Point2<f32>, se: S) -> Result<S::Ok, S::Error>
-// 	where
-// 		S: Serializer,
-// 	{
-// 		let mut tu = se.serialize_tuple(2)?;
-// 		tu.serialize_element(&point.x)?;
-// 		tu.serialize_element(&point.y)?;
-// 		tu.end()
-// 	}
-//
-// 	struct Point2Visitor();
-//
-// 	impl<'de> Visitor<'de> for Point2Visitor {
-// 		type Value = Point2<f32>;
-//
-// 		fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-// 			formatter.write_str("a 2-tuple of 2 f32's")
-// 		}
-// 	}
-//
-// 	pub fn deserialize<'de, D>(de: D) -> Result<Point2<f32>, D::Error>
-// 	where
-// 		D: Deserializer<'de>,
-// 	{
-// 		de.deserialize_tuple(2, Point2Visitor())
-// 	}
-// }
-
-#[derive(Debug, Serialize, Deserialize)]
-enum TileDrawable {
-	HexTile {
-		uv: Rect,
-		bounds: Rect,
-	},
-	#[serde(other)]
-	Unmapped,
-}
-// struct TileDrawable {
-// 	uv: Rect,
-// 	bounds: Rect,
-// 	// #[serde(with = "point2_de_serialize")]
-// 	// tile_center: Point2<f32>,
-// }
 
 struct TilesDrawable {
 	uv: Rect,
@@ -87,7 +37,7 @@ struct GameState {
 
 pub struct Game {
 	state: GameState,
-	engine: over_simple_game_1::Engine<GameState>,
+	engine: Engine<GameState>,
 	events_loop: ggez::event::EventsLoop,
 	// gamepad_enabled: bool,
 }
@@ -104,7 +54,7 @@ impl fmt::Debug for GameState {
 	}
 }
 
-impl SimpleIO for GameState {
+impl EngineIO for GameState {
 	type ReadError = GameError;
 	type Read = ggez::filesystem::File;
 
@@ -124,8 +74,8 @@ impl SimpleIO for GameState {
 
 	fn tile_added(
 		&mut self,
-		index: usize,
-		tile_type: &mut TileType<Self>,
+		_index: usize,
+		_tile_type: &mut TileType<Self>,
 	) -> Result<(), Self::TileAddedError> {
 		Ok(())
 	}
@@ -172,9 +122,12 @@ impl Game {
 		// let conf = ggez::conf::Conf::new();
 		// let gamepad_enabled = conf.modules.gamepad;
 
+		let state = GameState::new(ctx);
+		let engine = Engine::new();
+
 		Ok(Game {
-			state: GameState::new(ctx),
-			engine: over_simple_game_1::Engine::new(),
+			state,
+			engine,
 			events_loop,
 			// gamepad_enabled,
 		})
@@ -187,7 +140,7 @@ impl Game {
 			SimpleAlternationMapGenerator::new(&mut self.engine, &["dirt", "grass", "sand"])?;
 		let name = self.state.visible_map.clone();
 		self.engine
-			.generate_map(&mut self.state, name, 0, 0, false, &mut generator)?;
+			.generate_map(&mut self.state, name, 6, 4, true, &mut generator)?;
 
 		Ok(())
 	}
@@ -488,14 +441,7 @@ impl GameState {
 		let delta = ggez::timer::delta(&self.ctx);
 		self.zoom -= (self.zoom - self.screen_tiles) * (delta.as_secs_f32() * 5.0);
 		graphics::clear(&mut self.ctx, graphics::BLACK);
-		// let screen = Rect::new(-300.0, -300.0, 600.0, 600.0);
-		// let mut screen = self.viewable_rect;
-		// screen.x -= 4.0;
-		// screen.y -= 4.0;
-		// screen.w += 8.0;
-		// screen.h += 8.0;
-		// graphics::set_screen_coordinates(&mut self.ctx, screen)?;
-		let mut screen_coords = Rect::new(
+		let screen_coords = Rect::new(
 			self.view_center.x - self.zoom * 0.5 * self.aspect_ratio,
 			self.view_center.y - self.zoom * 0.5,
 			self.zoom * self.aspect_ratio,
@@ -531,7 +477,7 @@ impl GameState {
 				radius.abs() as i8
 			};
 			for c in
-				CoordHex::from_linear(self.view_center.x, self.view_center.y).iter_neighbors(radius)
+				Coord::from_linear(self.view_center.x, self.view_center.y).iter_neighbors(radius)
 			{
 				let (px, py) = c.to_linear();
 				let px = px * self.scale.x;
@@ -589,87 +535,4 @@ impl GameState {
 		}
 		Ok(())
 	}
-
-	// fn draw_map(&mut self, ctx: &mut Context) -> GameResult<()> {
-	// 	if let None = self.tiles_mesh {
-	// 		if let None = self.tiles_image {
-	// 			let mut tiles_image = graphics::Image::new(ctx, "/tiles/map_tiles.png")?;
-	// 			tiles_image.set_filter(FilterMode::Nearest);
-	// 			self.tiles_image = Some(tiles_image);
-	// 		}
-	//
-	// 		let tiles_image = self.tiles_image.clone().unwrap();
-	// 		let mut mesh = graphics::MeshBuilder::new();
-	// 		for c in Coord::new(0, 0).iterate_coords_to(Coord::new(20, 20)) {
-	// 			let tile_map = &self.game.maps[&self.visible_map].tiles[c.idx().0];
-	// 			let tile = &self.game.tile_types[tile_map.id as usize];
-	// 			// mesh.rectangle(
-	// 			// 	DrawMode::fill(),
-	// 			// 	Rect::new(c.x as f32, c.y as f32, 1.0, 1.0),
-	// 			// 	graphics::WHITE,
-	// 			// );
-	// 			let tile_size = 1.0;
-	// 			let uv_epsilon = if let FilterMode::Nearest = tiles_image.filter() {
-	// 				0.0
-	// 			} else {
-	// 				// Yes this is huge but linear interpolation sucks for atlas images...
-	// 				8.0 * 1024.0 * f32::EPSILON
-	// 			};
-	// 			mesh.raw(
-	// 				&[
-	// 					Vertex {
-	// 						// top-left
-	// 						pos: [c.x as f32, c.y as f32],
-	// 						uv: [tile.uv.x + uv_epsilon, tile.uv.y + uv_epsilon],
-	// 						color: [1.0, 1.0, 1.0, 1.0],
-	// 					},
-	// 					Vertex {
-	// 						// bottom-left
-	// 						pos: [c.x as f32, c.y as f32 + tile_size],
-	// 						uv: [tile.uv.x + uv_epsilon, tile.uv.y + tile.uv.h - uv_epsilon],
-	// 						color: [1.0, 1.0, 1.0, 1.0],
-	// 					},
-	// 					Vertex {
-	// 						// bottom-right
-	// 						pos: [c.x as f32 + tile_size, c.y as f32 + tile_size],
-	// 						uv: [
-	// 							tile.uv.x + tile.uv.w - uv_epsilon,
-	// 							tile.uv.y + tile.uv.h - uv_epsilon,
-	// 						],
-	// 						color: [1.0, 1.0, 1.0, 1.0],
-	// 					},
-	// 					Vertex {
-	// 						// top-right
-	// 						pos: [c.x as f32 + tile_size, c.y as f32],
-	// 						uv: [tile.uv.x + tile.uv.w - uv_epsilon, tile.uv.y + uv_epsilon],
-	// 						color: [1.0, 1.0, 1.0, 1.0],
-	// 					},
-	// 				],
-	// 				&[0, 1, 2, 0, 2, 3],
-	// 				None,
-	// 			);
-	// 		}
-	// 		let mesh = mesh.texture(tiles_image).build(ctx)?;
-	// 		self.tiles_mesh = Some(mesh);
-	// 	}
-	// 	let param = DrawParam::new()
-	// 		.dest(Point2::new(0.0, 0.0))
-	// 		.scale(Vector2::new(self.zoom, self.zoom));
-	// 	if let Some(mesh) = &self.tiles_mesh {
-	// 		mesh.draw(ctx, param)?;
-	// 	}
-	// 	Ok(())
-	// }
 }
-
-// impl EventHandler for GameState {
-// 	fn update(&mut self, _ctx: &mut Context) -> GameResult<()> {
-// 		Ok(())
-// 	}
-//
-// 	fn draw(&mut self, ctx: &mut Context) -> GameResult<()> {
-// 		graphics::clear(ctx, graphics::BLACK);
-// 		// self.draw_map(ctx)?;
-// 		graphics::present(ctx)
-// 	}
-// }
