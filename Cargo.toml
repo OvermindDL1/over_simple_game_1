@@ -9,6 +9,9 @@ description = "Little game for the purpose of learning `shipyard` in a full prod
 
 [dependencies]
 ggez = { git = "https://github.com/ggez/ggez.git" }
+winit = { version = "0.19.3" } # Same version as ggez, keep in sync
 shipyard = { git = "https://github.com/leudz/shipyard.git", features = ["std", "panic", "parallel", "serde", "non_send", "non_sync"] }
-anyhow = "1.0.31"
-thiserror = "1.0.20"
+anyhow = "1.0"
+thiserror = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+ron = "0.6"

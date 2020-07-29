@@ -27,3 +27,6 @@
 # Rust Source files
 !/src/**/*.rs
 
+# Non-source Resources
+#!/resources/**/*.png
+#!/resources/**/*.ron

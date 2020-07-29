@@ -1,8 +1,61 @@
-use super::coords::{Coord, CoordsRangeIterator};
 use ggez::graphics::Rect;
 use shipyard::EntityId;
 use std::collections::HashMap;
 use std::fmt::Debug;
+use std::num::NonZeroI8;
+
+/*
+pub struct GeodesicSubdivision {
+	planes: [Box<GeodesicPlane>; 4],
+	top_point: bool,
+}
+
+pub struct GeodesicData {}
+
+pub enum Geodesic /*Trianguloid*/ {
+	Subdivision(GeodesicSubdivision),
+	Data(GeodesicData),
+}
+
+impl Geodesic {
+	fn new(subdivisions: u8, is_top_point: bool) -> Geodesic {
+		if subdivisions > 4 {
+			panic!("Invalid subdivision count for new Geodesix, valid range is up to and including 4, value given:  {}", subdivisions);
+		}
+		if subdivisions == 0 {
+			Geodesic::Data(GeodesicData {})
+		} else {
+			Geodesic::Subdivision(GeodesicSubdivision {})
+		}
+	}
+}
+
+#[cfg(test)]
+mod geodesic_tests {
+	#[test]
+	fn geodesic_test() {
+		let geo = Geodesic::new();
+	}
+}
+*/
+
+/*
+pub struct GeodesicRhombus {
+	tiles: Vec<Tile>,
+}
+
+pub struct GeodesicLongitude {
+	rhomubses: Vec<GeodesicRhombus>,
+}
+
+pub struct GeodesicLatitude {
+	longitude: Vec<GeodesicLongitude>,
+}
+
+pub struct GeodesicMap {
+	latitude: GeodesicLatitude,
+}
+*/
 
 // const COORD_IN_CHUNK_MASk: i8 = 0b0000_1111;
 // const CHUNK_COORD_MASK: i8 = 0b1111_0000;
