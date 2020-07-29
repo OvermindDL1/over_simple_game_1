@@ -1,0 +1,30 @@
+// TileMap Image is 1024x2048
+[
+	TileType(
+	    name: "dirt",
+	    interface: (),
+	    // 366, 718, 120, 140
+	    // interface: TileDrawable(
+	    //     uv: Rect(x: 0.357421875, y: 0.3466796875, w: 0.1171875, h: 0.068359375),
+	    //     bounds: Rect(x: -0.5, y: -0.5833333333, w: 0.5, h: 0.5833333333),
+        // ),
+    ),
+	TileType(
+	    name: "grass",
+	    interface: (),
+	    // 488, 0, 120, 140
+	    // interface: TileDrawable(
+	    //     uv: Rect(x: 0.4765625, y: 0.0, w: 0.1171875, h: 0.068359375),
+	    //     bounds: Rect(x: -0.5, y: -0.5833333333, w: 0.5, h: 0.5833333333),
+        // ),
+    ),
+	TileType(
+	    name: "sand",
+	    interface: (),
+	    // 244, 1278, 120, 140
+	    // interface: TileDrawable(
+	    //     uv: Rect(x: 0.23828125, y: 0.6240234375, w: 0.1171875, h: 0.068359375),
+	    //     bounds: Rect(x: -0.5, y: -0.5833333333, w: 0.5, h: 0.5833333333),
+        // ),
+    ),
+]
