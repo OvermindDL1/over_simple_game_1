@@ -37,7 +37,7 @@ pub enum EngineError<IO: EngineIO + 'static> {
 }
 
 pub struct Engine<IO: EngineIO> {
-	ecs: shipyard::World,
+	pub ecs: shipyard::World,
 	pub tile_types: TileTypes<IO>,
 	pub maps: HashMap<String, TileMap>,
 }

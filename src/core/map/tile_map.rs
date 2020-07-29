@@ -57,4 +57,9 @@ impl TileMap {
 		let idx = c.idx(self.width, self.height, self.wraps_x)?;
 		Some(&self.tiles[idx])
 	}
+
+	pub fn get_tile_mut(&mut self, c: Coord) -> Option<&mut Tile> {
+		let idx = c.idx(self.width, self.height, self.wraps_x)?;
+		Some(&mut self.tiles[idx])
+	}
 }

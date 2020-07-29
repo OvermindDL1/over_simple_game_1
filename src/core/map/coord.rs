@@ -66,33 +66,11 @@ impl Coord {
 	/// assert_eq!(Coord::from_linear(-1.5, -1.0), Coord::new_axial(-1, -1));
 	/// ```
 	pub fn from_linear(x: f32, y: f32) -> Coord {
-		let x = x - y * 0.5;
-		// let q = x.round().rem(256.0) as i8;
-		// let r = y.round().rem(256.0) as i8;
-		// let q = (x.round() as isize & 0xFF) as u8;
-		// let r = (y.round() as isize & 0xFF) as u8;
-		let q = x.round() as i8;
-		let r = y.round() as i8;
-		Coord::new_axial(q, r)
-		// let s3 = 3.0f32.sqrt();
-		// let is3 = 1.0 / s3;
-		// let fx = (-2.0 / 3.0) * x;
-		// let fy = (1.0 / 3.0) * x + is3 * y;
-		// let fz = (1.0 / 3.0) * x - is3 * y;
-		// let a = (fx - fy).ceil();
-		// let b = (fy - fz).ceil();
-		// let c = (fz - fx).ceil();
-		// let x = ((a - c) / 3.0).round() as i8;
-		// let y = ((b - a) / 3.0).round() as i8;
-		// let z = ((c - b) / 3.0).round() as i8;
-		// Coord::new_cubic(x, y, z)
-		// let s3 = 3.0f32.sqrt();
-		// x /= s3;
-		// y /= s3;
-		// let p = (x + s3 * y + 1.0).sqrt();
-		// let q = (((2.0 * x + 1.0).floor() + p) / 3.0).floor();
-		// let r = ((((-x + s3 * y + 1.0).floor()) + p) / 3.0).floor();
-		// Coord::new_axial(q as i8, r as i8)
+		let s3 = 3.0f32.sqrt();
+		let a = (x + s3 * y + 1.0).floor();
+		let q = (((2.0 * x + 1.0).floor() + a) / 3.0).floor();
+		let r = ((a + (-x + s3 * y + 1.0).floor()) / 3.0).floor();
+		Coord::new_axial((q - r) as i8, r as i8)
 	}
 
 	pub fn to_linear(self) -> (f32, f32) {
@@ -137,21 +115,6 @@ impl Coord {
 		let x = (self.0 as u8) as usize % (max_x as usize + 1);
 		let z = (self.1 as u8) as usize;
 		Some((z * max_x as usize) + x)
-
-		// let x = (self.0 as u8) as usize % (max_x as usize + 1);
-		// let z = (self.1 as u8) as usize % (max_z as usize + 1);
-		// (z * max_x as usize) + x
-
-		// let y1 = self.1 as u8;
-		// let y2 = y1 as usize;
-		// let m1 = max_x as usize;
-		// let x1 = self.0 as u8;
-		// let x2 = x1 as usize;
-		// let y3 = y2 * m1;
-		// let r = y3 + x2;
-		// r
-
-		// (self.1 as u8 as usize * max_x as usize) + self.0 as u8 as usize
 	}
 
 	pub fn scale(self, scale: i8) -> Coord {
@@ -175,19 +138,6 @@ impl Coord {
 	pub fn ccw_offset(self, center: Coord) -> Coord {
 		(center - self).ccw() + center
 	}
-
-	// pub fn iterate_linear_box(self, to: Coord) -> CoordLinearViewIterator {
-	// 	let offset_x: i8 = to.1.wrapping_sub(self.1).wrapping_add(1).wrapping_div(2);
-	// 	let stride: i8 = to.0.wrapping_sub(self.0).wrapping_add(offset_x);
-	// 	CoordLinearViewIterator {
-	// 		stride,
-	// 		stride_remaining: stride,
-	// 		from: self,
-	// 		current: self,
-	// 		to,
-	// 		done: false,
-	// 	}
-	// }
 
 	pub fn iter_neighbors_ring(self, distance: i8) -> CoordRingIterator {
 		CoordRingIterator::new(self, distance)
@@ -221,50 +171,6 @@ impl Neg for Coord {
 		Coord(-self.0, -self.1)
 	}
 }
-
-// // Unsure if this is good...
-// pub struct CoordLinearViewIterator {
-// 	stride: i8,
-// 	stride_remaining: i8,
-// 	from: Coord,
-// 	current: Coord,
-// 	to: Coord,
-// 	done: bool,
-// }
-//
-// impl Iterator for CoordLinearViewIterator {
-// 	type Item = Coord;
-//
-// 	fn next(&mut self) -> Option<Self::Item> {
-// 		if self.done {
-// 			return None;
-// 		}
-// 		let coord = if self.stride_remaining == 0 {
-// 			if self.current.1 == self.to.1 {
-// 				self.done = true;
-// 				self.current
-// 			} else {
-// 				let coord = self.current;
-// 				self.current.1 = self.current.1.wrapping_add(1);
-// 				let offset_x = self
-// 					.current
-// 					.1
-// 					.wrapping_sub(self.from.1)
-// 					.wrapping_add(1)
-// 					.wrapping_div(2);
-// 				self.current.0 = self.from.0.wrapping_add(offset_x);
-// 				self.stride_remaining = self.stride;
-// 				coord
-// 			}
-// 		} else {
-// 			let coord = self.current;
-// 			self.current.0 = self.current.0.wrapping_add(1);
-// 			self.stride_remaining -= 1;
-// 			coord
-// 		};
-// 		Some(coord)
-// 	}
-// }
 
 pub struct CoordRingIterator {
 	point: Option<Coord>,

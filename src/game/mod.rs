@@ -4,10 +4,11 @@ use std::path::PathBuf;
 
 use anyhow::Context as AnyContext;
 use ggez::conf::{FullscreenType, NumSamples, WindowMode, WindowSetup};
-use ggez::graphics::{Color, DrawParam, Drawable, FilterMode, Rect, Vertex};
+use ggez::graphics::{Color, DrawMode, DrawParam, Drawable, FilterMode, Rect, Vertex};
 use ggez::input::{keyboard, mouse};
-use ggez::nalgebra::Point2;
+use ggez::nalgebra as na;
 use ggez::{graphics, Context, ContextBuilder, GameError};
+use shipyard::{AllStoragesViewMut, EntitiesView, EntityId, View, ViewMut};
 use winit::{
 	dpi, ElementState, Event, KeyboardInput, ModifiersState, MouseButton, MouseScrollDelta,
 	VirtualKeyCode, WindowEvent,
@@ -15,6 +16,8 @@ use winit::{
 
 use over_simple_game_1::core::map::generator::SimpleAlternationMapGenerator;
 use over_simple_game_1::prelude::*;
+
+mod components;
 
 struct TilesDrawable {
 	uv: Rect,
@@ -27,12 +30,15 @@ struct GameState {
 	visible_map: String,
 	screen_tiles: f32,
 	zoom: f32,
-	scale: Point2<f32>,
-	view_center: Point2<f32>,
+	scale: na::Point2<f32>,
+	view_center: na::Point2<f32>,
+	screen_size: dpi::LogicalSize,
 	aspect_ratio: f32,
 	tiles_image: Option<graphics::Image>,
 	tiles_mesh: Option<graphics::Mesh>,
 	tiles_drawable: Vec<TilesDrawable>,
+	selected: Option<EntityId>,
+	selected_mesh: Option<graphics::Mesh>,
 }
 
 pub struct Game {
@@ -140,7 +146,7 @@ impl Game {
 			SimpleAlternationMapGenerator::new(&mut self.engine, &["dirt", "grass", "sand"])?;
 		let name = self.state.visible_map.clone();
 		self.engine
-			.generate_map(&mut self.state, name, 6, 4, true, &mut generator)?;
+			.generate_map(&mut self.state, name, 7, 7, false, &mut generator)?;
 
 		Ok(())
 	}
@@ -160,7 +166,7 @@ impl Game {
 		state.ctx.timer_context.tick();
 		events_loop.poll_events(|event| {
 			state.ctx.process_event(&event);
-			state.dispatch_event(engine, event)
+			state.dispatch_event(engine, event).unwrap();
 		});
 		// Handle gamepad events if necessary.
 		// Yeah okay, ggez has this entirely borked behind private...
@@ -196,12 +202,18 @@ impl GameState {
 			visible_map: "world0".to_owned(),
 			screen_tiles: 2.0,
 			zoom: 2.0,
-			scale: Point2::from([1.0, 6.0 / 7.0]),
-			view_center: Point2::from([3.0, 2.0]),
+			scale: na::Point2::from([1.0, 6.0 / 7.0]),
+			view_center: na::Point2::from([4.0, 4.0]),
+			screen_size: dpi::LogicalSize {
+				width: 1.0,
+				height: 1.0,
+			},
 			aspect_ratio: 1.0,
 			tiles_image: None,
 			tiles_mesh: None,
 			tiles_drawable: vec![],
+			selected: None,
+			selected_mesh: None,
 		}
 	}
 
@@ -243,22 +255,26 @@ impl GameState {
 		Ok(())
 	}
 
-	fn dispatch_event(&mut self, engine: &mut Engine<GameState>, event: Event) {
+	fn dispatch_event(
+		&mut self,
+		engine: &mut Engine<GameState>,
+		event: Event,
+	) -> anyhow::Result<()> {
 		match event {
 			Event::WindowEvent { event, .. } => match event {
 				WindowEvent::Resized(logical_size) => {
-					self.resize_event(engine, logical_size).unwrap();
+					self.resize_event(engine, logical_size)?;
 				}
 				WindowEvent::CloseRequested => {
-					if self.quit_event(engine).unwrap() {
+					if self.quit_event(engine)? {
 						ggez::event::quit(&mut self.ctx);
 					}
 				}
 				WindowEvent::Focused(gained) => {
-					self.focus_event(engine, gained).unwrap();
+					self.focus_event(engine, gained)?;
 				}
 				WindowEvent::ReceivedCharacter(ch) => {
-					self.text_input_event(engine, ch).unwrap();
+					self.text_input_event(engine, ch)?;
 				}
 				WindowEvent::KeyboardInput {
 					input:
@@ -271,8 +287,7 @@ impl GameState {
 					..
 				} => {
 					let repeat = keyboard::is_key_repeated(&self.ctx);
-					self.key_down_event(engine, keycode, modifiers, repeat)
-						.unwrap();
+					self.key_down_event(engine, keycode, modifiers, repeat)?;
 				}
 				WindowEvent::KeyboardInput {
 					input:
@@ -284,7 +299,7 @@ impl GameState {
 						},
 					..
 				} => {
-					self.key_up_event(engine, keycode, modifiers).unwrap();
+					self.key_up_event(engine, keycode, modifiers)?;
 				}
 				WindowEvent::MouseWheel { delta, .. } => {
 					let (x, y) = match delta {
@@ -293,7 +308,7 @@ impl GameState {
 							(x as f32, y as f32)
 						}
 					};
-					self.mouse_wheel_event(engine, x, y).unwrap();
+					self.mouse_wheel_event(engine, x, y)?;
 				}
 				WindowEvent::MouseInput {
 					state: element_state,
@@ -303,20 +318,17 @@ impl GameState {
 					let position = mouse::position(&self.ctx);
 					match element_state {
 						ElementState::Pressed => {
-							self.mouse_button_down_event(engine, button, position.x, position.y)
-								.unwrap();
+							self.mouse_button_down_event(engine, button, position.x, position.y)?;
 						}
 						ElementState::Released => {
-							self.mouse_button_up_event(engine, button, position.x, position.y)
-								.unwrap();
+							self.mouse_button_up_event(engine, button, position.x, position.y)?;
 						}
 					}
 				}
 				WindowEvent::CursorMoved { .. } => {
 					let position = mouse::position(&self.ctx);
 					let delta = mouse::delta(&self.ctx);
-					self.mouse_motion_event(engine, position.x, position.y, delta.x, delta.y)
-						.unwrap();
+					self.mouse_motion_event(engine, position.x, position.y, delta.x, delta.y)?;
 				}
 				_x => {
 					// trace!("ignoring window event {:?}", x);
@@ -330,6 +342,8 @@ impl GameState {
 			Event::Awakened => (),
 			Event::Suspended(_) => (),
 		}
+
+		Ok(())
 	}
 
 	// Callbacks
@@ -338,8 +352,8 @@ impl GameState {
 		_engine: &mut Engine<GameState>,
 		logical_size: dpi::LogicalSize,
 	) -> anyhow::Result<()> {
+		self.screen_size = logical_size;
 		self.aspect_ratio = (logical_size.width / logical_size.height) as f32;
-		dbg!(self.aspect_ratio);
 		self.tiles_mesh = None;
 		Ok(())
 	}
@@ -377,9 +391,18 @@ impl GameState {
 	fn key_up_event(
 		&mut self,
 		_engine: &mut Engine<GameState>,
-		_keycode: VirtualKeyCode,
-		_modifiers: ModifiersState,
+		keycode: VirtualKeyCode,
+		modifiers: ModifiersState,
 	) -> anyhow::Result<()> {
+		use VirtualKeyCode::*;
+		match (keycode, modifiers) {
+			(Escape, _) => ggez::event::quit(&mut self.ctx),
+			(W, _) => (),
+			(A, _) => (),
+			(S, _) => (),
+			(D, _) => (),
+			_ => (),
+		}
 		Ok(())
 	}
 
@@ -396,20 +419,99 @@ impl GameState {
 			self.screen_tiles = 16.0;
 		}
 		self.tiles_mesh = None;
-		dbg!((y, self.screen_tiles));
 		Ok(())
 	}
 
 	fn mouse_button_down_event(
 		&mut self,
-		_engine: &mut Engine<GameState>,
+		engine: &mut Engine<GameState>,
 		_button: MouseButton,
 		x: f32,
 		y: f32,
 	) -> anyhow::Result<()> {
-		// let x = ;
-		dbg!((x, y));
+		let screen_x = x / self.screen_size.width as f32;
+		let screen_y = y / self.screen_size.height as f32;
+		let (map_x, map_y) = self.screen_ratio_to_map(screen_x, screen_y);
+		let coord = Coord::from_linear(map_x, map_y);
+		self.set_selected_coord(engine, coord)?;
+		dbg!(coord);
 		Ok(())
+	}
+
+	fn set_selected_coord(
+		&mut self,
+		engine: &mut Engine<GameState>,
+		coord: Coord,
+	) -> anyhow::Result<()> {
+		self.remove_selected(engine)?;
+		let tile_map = engine
+			.maps
+			.get_mut(&self.visible_map)
+			.context("unable to lookup the visible map")?;
+		match tile_map.get_tile_mut(coord) {
+			None => (),
+			Some(tile) => {
+				let entity = engine
+					.ecs
+					.try_entity_builder()?
+					.try_with(components::IsSelected())?
+					.try_with(coord)?
+					.try_build()?;
+				tile.entities.insert(entity);
+				self.selected = Some(entity);
+				//self.set_selected_entity(engine, entity);
+			}
+		}
+
+		Ok(())
+	}
+
+	fn set_selected_entity(&mut self, engine: &mut Engine<GameState>, entity: EntityId) {
+		engine.ecs.run(
+			|entities: EntitiesView, mut selected: ViewMut<components::IsSelected>| {
+				entities.add_component(&mut selected, components::IsSelected(), entity);
+			},
+		)
+	}
+
+	fn remove_selected(&mut self, engine: &mut Engine<GameState>) -> anyhow::Result<()> {
+		match self.selected {
+			None => (),
+			Some(entity) => {
+				self.selected = None;
+				let ecs = &mut engine.ecs;
+				let maps = &mut engine.maps;
+				ecs.run(
+					|mut all_storages: AllStoragesViewMut| -> anyhow::Result<()> {
+						{
+							let coords = all_storages.try_borrow::<View<Coord>>()?;
+							let coord = coords[entity];
+							let tile_map = maps
+								.get_mut(&self.visible_map)
+								.context("unable to lookup the visible map")?;
+							let tile = tile_map
+								.get_tile_mut(coord)
+								.context("tile cannot be found that should exist")?;
+							tile.entities.remove(&entity);
+						}
+						all_storages.delete(entity);
+						Ok(())
+					},
+				)?;
+			}
+		}
+
+		Ok(())
+	}
+
+	fn screen_ratio_to_map(&self, screen_x: f32, screen_y: f32) -> (f32, f32) {
+		let visible_width = self.screen_tiles * self.aspect_ratio;
+		let visible_height = self.screen_tiles;
+		let offset_x = (visible_width * 0.5) - self.view_center.x;
+		let offset_y = (visible_height * 0.5) - self.view_center.y;
+		let map_x = (screen_x * visible_width * self.scale.x) - offset_x;
+		let map_y = (screen_y * visible_height * self.scale.x) - offset_y;
+		(map_x, map_y)
 	}
 
 	fn mouse_button_up_event(
@@ -449,6 +551,7 @@ impl GameState {
 		);
 		graphics::set_screen_coordinates(&mut self.ctx, screen_coords)?;
 		self.draw_map(engine)?;
+		self.draw_selection(engine)?;
 		graphics::present(&mut self.ctx)?;
 		Ok(())
 	}
@@ -470,7 +573,7 @@ impl GameState {
 				.maps
 				.get(&self.visible_map)
 				.with_context(|| format!("Unable to load visible map: {}", self.visible_map))?;
-			let radius = self.screen_tiles * self.aspect_ratio;
+			let radius = self.screen_tiles * self.aspect_ratio + 1.0;
 			let radius = if radius.abs() > 16.0 {
 				16i8
 			} else {
@@ -532,6 +635,28 @@ impl GameState {
 		// .scale(Vector2::new(self.zoom, self.zoom));
 		if let Some(mesh) = &self.tiles_mesh {
 			mesh.draw(&mut self.ctx, param)?;
+		}
+		Ok(())
+	}
+
+	fn draw_selection(&mut self, engine: &mut Engine<GameState>) -> anyhow::Result<()> {
+		if let Some(entity) = self.selected {
+			let (mut x, mut y) = engine.ecs.try_borrow::<View<Coord>>()?[entity].to_linear();
+			x *= self.scale.x;
+			y *= self.scale.y;
+			if None == self.selected_mesh {
+				self.selected_mesh = Some(graphics::Mesh::new_circle(
+					&mut self.ctx,
+					DrawMode::stroke(0.1),
+					na::Point2::new(0.0, 0.0),
+					1.0,
+					0.2,
+					graphics::WHITE,
+				)?);
+			}
+			if let Some(mesh) = &self.selected_mesh {
+				mesh.draw(&mut self.ctx, DrawParam::new().dest(na::Point2::new(x, y)))?;
+			}
 		}
 		Ok(())
 	}

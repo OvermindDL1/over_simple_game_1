@@ -1,7 +1,7 @@
 use crate::core::engine::io::EngineIO;
 use serde::{Deserialize, Serialize};
 use shipyard::EntityId;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use thiserror::*;
 
 pub type TileIdx = u16;
@@ -9,14 +9,14 @@ pub type TileIdx = u16;
 #[derive(Debug)]
 pub struct Tile {
 	pub id: TileIdx,
-	pub entities: Vec<EntityId>,
+	pub entities: HashSet<EntityId>,
 }
 
 impl Tile {
 	pub(crate) fn new(id: TileIdx) -> Tile {
 		Tile {
 			id,
-			entities: vec![],
+			entities: HashSet::new(),
 		}
 	}
 }
