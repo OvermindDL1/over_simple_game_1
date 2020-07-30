@@ -94,9 +94,7 @@ impl<ImageType, Unique: Copy> AtlasBuilder<ImageType, Unique> {
 			allocations: HashMap::new(),
 			image_data: vec![255; width as usize * height as usize * 4],
 			entries: IndexMap::new(),
-			_image: Default::default()
-			// entries: vec![],
-			// mappings: HashMap::new(),
+			_image: Default::default(),
 		}
 	}
 
@@ -206,8 +204,6 @@ impl<ImageType, Unique: Copy> MultiAtlasBuilder<ImageType, Unique> {
 		MultiAtlasBuilder {
 			atlases: vec![AtlasBuilder::new(width, height)],
 			entries: IndexMap::new(),
-			// entries: vec![],
-			// mappings: HashMap::new(),
 		}
 	}
 
