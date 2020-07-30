@@ -82,3 +82,9 @@ impl<IO: EngineIO> Engine<IO> {
 		Ok(())
 	}
 }
+
+impl<IO: EngineIO> Default for Engine<IO> {
+	fn default() -> Self {
+		Engine::new()
+	}
+}

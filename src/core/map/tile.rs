@@ -107,7 +107,7 @@ impl<IO: EngineIO> TileTypes<IO> {
 	}
 
 	pub(crate) fn load_tiles(&mut self, io: &mut IO) -> Result<(), TileTypesError<IO>> {
-		if self.tile_types.len() != 0 {
+		if !self.tile_types.is_empty() {
 			return Err(TileTypesError::TileTypesAlreadyFilled());
 		}
 

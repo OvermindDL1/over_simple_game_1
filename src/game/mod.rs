@@ -72,6 +72,7 @@ impl EngineIO for GameState {
 
 	type TileInterface = ();
 
+	#[allow(clippy::unused_unit)]
 	fn blank_tile_interface() -> Self::TileInterface {
 		()
 	}
@@ -466,7 +467,7 @@ impl GameState {
 		Ok(())
 	}
 
-	fn set_selected_entity(&mut self, engine: &mut Engine<GameState>, entity: EntityId) {
+	fn _set_selected_entity(&mut self, engine: &mut Engine<GameState>, entity: EntityId) {
 		engine.ecs.run(
 			|entities: EntitiesView, mut selected: ViewMut<components::IsSelected>| {
 				entities.add_component(&mut selected, components::IsSelected(), entity);
