@@ -1,3 +1,5 @@
+mod atlas;
+
 use std::convert::Infallible;
 use std::fmt;
 use std::path::PathBuf;
@@ -8,21 +10,47 @@ use ggez::graphics::{Color, DrawMode, DrawParam, Drawable, FilterMode, Rect, Ver
 use ggez::input::{keyboard, mouse};
 use ggez::nalgebra as na;
 use ggez::{graphics, Context, ContextBuilder, GameError};
+use log::*;
+use serde::{Deserialize, Serialize};
 use shipyard::{AllStoragesViewMut, EntitiesView, EntityId, IntoIter, View, ViewMut};
 use winit::{
 	dpi, ElementState, Event, KeyboardInput, ModifiersState, MouseButton, MouseScrollDelta,
 	VirtualKeyCode, WindowEvent,
 };
 
+use crate::game::atlas::{AtlasId, MultiAtlas, MultiAtlasBuilder};
 use over_simple_game_1::core::map::generator::SimpleAlternationMapGenerator;
 use over_simple_game_1::prelude::*;
 
 mod components;
 
-struct TilesDrawable {
-	uv: Rect,
+#[derive(Clone, Copy, Debug)]
+enum MapAtlas {}
+
+fn serde_hex_bound() -> Rect {
+	Rect {
+		x: -0.5,
+		y: -0.5833333,
+		w: 1.0,
+		h: 1.1666666,
+	}
+}
+
+fn serde_hex_color() -> Color {
+	Color::new(1.0, 1.0, 1.0, 1.0)
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct TileDrawableInfo {
+	#[serde(default = "serde_hex_bound")]
 	bounds: Rect,
+	#[serde(default = "serde_hex_color")]
 	color: Color,
+}
+
+struct TilesDrawable {
+	atlas_id: AtlasId<MapAtlas>,
+	info: TileDrawableInfo,
 }
 
 struct GameState {
@@ -34,8 +62,8 @@ struct GameState {
 	view_center: na::Point2<f32>,
 	screen_size: dpi::LogicalSize,
 	aspect_ratio: f32,
-	tiles_image: Option<graphics::Image>,
-	tiles_mesh: Option<graphics::Mesh>,
+	tiles_atlas: MultiAtlas<graphics::Image, MapAtlas>,
+	tiles_meshes: Vec<Option<graphics::Mesh>>,
 	tiles_drawable: Vec<TilesDrawable>,
 	selected: Option<EntityId>,
 	selected_mesh: Option<graphics::Mesh>,
@@ -54,8 +82,7 @@ impl fmt::Debug for GameState {
 			.field("visible_map", &self.visible_map)
 			.field("screen_tiles", &self.screen_tiles)
 			.field("zoom", &self.zoom)
-			.field("tiles_image", &self.tiles_image)
-			.field("tiles_mesh", &self.tiles_mesh)
+			.field("tiles_meshes", &self.tiles_meshes)
 			.finish()
 	}
 }
@@ -196,7 +223,12 @@ impl Game {
 }
 
 impl GameState {
-	fn new(ctx: Context) -> GameState {
+	fn new(mut ctx: Context) -> GameState {
+		let tiles_atlas = MultiAtlasBuilder::new(1, 1)
+			.generate(&mut |_width, _height, _data| {
+				Ok(graphics::Image::solid(&mut ctx, 1, graphics::WHITE)?)
+			})
+			.unwrap();
 		GameState {
 			ctx,
 			visible_map: "world0".to_owned(),
@@ -209,8 +241,8 @@ impl GameState {
 				height: 1.0,
 			},
 			aspect_ratio: 1.0,
-			tiles_image: None,
-			tiles_mesh: None,
+			tiles_atlas,
+			tiles_meshes: vec![],
 			tiles_drawable: vec![],
 			selected: None,
 			selected_mesh: None,
@@ -221,37 +253,52 @@ impl GameState {
 		self.tiles_drawable.clear();
 		self.tiles_drawable
 			.reserve(engine.tile_types.tile_types.len());
-		let tile_width = 120.0 / 1024.0f32;
-		let tile_height = 140.0 / 2048.0f32;
-		for tile_type in engine.tile_types.tile_types.iter() {
-			let name: &str = &tile_type.name;
-			let tile_drawable: TilesDrawable = match name {
-				"dirt" => TilesDrawable {
-					uv: Rect::new(732.0 / 1024.0, 710.0 / 2048.0, tile_width, tile_height),
-					bounds: Rect::new(-0.5, -0.5833333, 1.0, 1.1666666),
-					// bounds: Rect::new(-0.5, -2.0 / 3.0, 1.0, 4.0 / 3.0),
-					color: Color::new(1.0, 1.0, 1.0, 1.0),
-				},
-				"grass" => TilesDrawable {
-					uv: Rect::new(610.0 / 1024.0, 142.0 / 2048.0, tile_width, tile_height),
-					bounds: Rect::new(-0.5, -0.5833333, 1.0, 1.1666666),
-					// bounds: Rect::new(-0.5, -2.0 / 3.0, 1.0, 4.0 / 3.0),
-					color: Color::new(1.0, 1.0, 1.0, 1.0),
-				},
-				"sand" => TilesDrawable {
-					uv: Rect::new(244.0 / 1024.0, 426.0 / 2048.0, tile_width, tile_height),
-					bounds: Rect::new(-0.5, -0.5833333, 1.0, 1.1666666),
-					// bounds: Rect::new(-0.5, -2.0 / 3.0, 1.0, 4.0 / 3.0),
-					color: Color::new(1.0, 1.0, 1.0, 1.0),
-				},
-				_ => TilesDrawable {
-					uv: Rect::new(0.0, 0.0, 0.0, 0.0),
-					bounds: Rect::new(0.0, 0.0, 0.0, 0.0),
-					color: Color::new(1.0, 0.0, 1.0, 1.0),
-				},
+		let mut tile_atlas_builder = MultiAtlasBuilder::new(2048, 2048);
+		for name in engine.tile_types.tile_types.iter().map(|t| &t.name) {
+			let ctx = &mut self.ctx;
+			let id = tile_atlas_builder.get_or_create_with(name, || {
+				use std::io::Read;
+				let mut path = PathBuf::from("/tiles");
+				path.push(format!("{}.png", name));
+
+				let mut buf = Vec::new();
+				let mut reader = ggez::filesystem::open(ctx, path)?;
+				let _ = reader.read_to_end(&mut buf)?;
+				let image = image::load_from_memory(&buf)?.to_rgba();
+				let width = image.width() as u16;
+				let height = image.height() as u16;
+				let rgba = image.into_raw();
+
+				Ok((width, height, rgba))
+			})?;
+
+			let mut path = PathBuf::from("/tiles");
+			path.push(format!("{}.png.ron", name));
+			let info = match ggez::filesystem::open(ctx, path) {
+				Err(_e) => {
+					debug!(
+						"Unable to load ron data for tile of `{}.png.ron`, using defaults",
+						name
+					);
+					TileDrawableInfo {
+						bounds: Rect::new(-0.5, -0.5833333, 1.0, 1.1666666),
+						color: Color::new(1.0, 1.0, 1.0, 1.0),
+					}
+				}
+				Ok(file) => ron::de::from_reader::<_, TileDrawableInfo>(file)?,
 			};
-			self.tiles_drawable.push(tile_drawable);
+
+			self.tiles_drawable
+				.push(TilesDrawable { atlas_id: id, info })
 		}
+		self.tiles_atlas = tile_atlas_builder.generate(&mut |width, height, rgba| {
+			let mut image = graphics::Image::from_rgba8(&mut self.ctx, width, height, rgba)
+				.context("failed converting atlas texture")?;
+			image.set_filter(FilterMode::Nearest);
+			Ok(image)
+		})?;
+		// let image = self.tiles_atlas.get_image_by_index(0).unwrap();
+		// image.encode(&mut self.ctx, graphics::ImageFormat::Png, "/tilemap0.png")?;
 		Ok(())
 	}
 
@@ -354,7 +401,7 @@ impl GameState {
 	) -> anyhow::Result<()> {
 		self.screen_size = logical_size;
 		self.aspect_ratio = (logical_size.width / logical_size.height) as f32;
-		self.tiles_mesh = None;
+		self.tiles_meshes.clear();
 		Ok(())
 	}
 
@@ -418,7 +465,7 @@ impl GameState {
 		} else if self.screen_tiles > 16.0 {
 			self.screen_tiles = 16.0;
 		}
-		self.tiles_mesh = None;
+		self.tiles_meshes.clear();
 		Ok(())
 	}
 
@@ -557,18 +604,12 @@ impl GameState {
 	}
 
 	fn draw_map(&mut self, engine: &mut Engine<GameState>) -> anyhow::Result<()> {
-		if self.tiles_mesh.is_none() {
-			if self.tiles_image.is_none() {
-				let mut tiles_image = graphics::Image::new(&mut self.ctx, "/tiles/map_tiles.png")?;
-				tiles_image.set_filter(FilterMode::Nearest);
-				self.tiles_image = Some(tiles_image);
-			}
+		if self.tiles_meshes.is_empty() {
+			let mut mesh_builders: Vec<_> = (0..self.tiles_atlas.len_atlases())
+				.into_iter()
+				.map(|_| (false, graphics::MeshBuilder::new()))
+				.collect();
 
-			let tiles_image = self
-				.tiles_image
-				.clone()
-				.context("Unable to clone `tiles_image`")?;
-			let mut mesh = graphics::MeshBuilder::new();
 			let tile_map = &engine
 				.maps
 				.get(&self.visible_map)
@@ -585,17 +626,16 @@ impl GameState {
 				let (px, py) = c.to_linear();
 				let px = px * self.scale.x;
 				let py = py * self.scale.y;
-				// let idx = c.idx(tile_map.width, tile_map.height);
 				if let Some(tile) = tile_map.get_tile(c) {
-					// let tile = &tile_map.tiles[idx];
-					// let tile_type = &engine.tile_types.tile_types[tile.id as usize];
 					let tile_drawable = &self.tiles_drawable[tile.id as usize];
-					let uv = tile_drawable.uv;
-					let mut pos = tile_drawable.bounds;
+					let uv = self.tiles_atlas.get_entry(tile_drawable.atlas_id);
+					let mut pos = tile_drawable.info.bounds;
 					pos.translate([px, py]);
-					let color = tile_drawable.color;
+					let color = tile_drawable.info.color;
 					let color: [f32; 4] = [color.r, color.g, color.b, color.a];
-					mesh.raw(
+					let (active, mesh_builder) = &mut mesh_builders[uv.get_atlas_idx()];
+					*active = true;
+					mesh_builder.raw(
 						&[
 							Vertex {
 								// left-top
@@ -627,14 +667,26 @@ impl GameState {
 					);
 				}
 			}
-			let mesh = mesh.texture(tiles_image).build(&mut self.ctx)?;
-			self.tiles_mesh = Some(mesh);
+			self.tiles_meshes.clear();
+			for (idx, (active, mut builder)) in mesh_builders.into_iter().enumerate() {
+				if !active {
+					self.tiles_meshes.push(None);
+				} else {
+					let texture = self
+						.tiles_atlas
+						.get_image_by_index(idx)
+						.context("failed to get image that must exist")?;
+					self.tiles_meshes
+						.push(Some(builder.texture(texture.clone()).build(&mut self.ctx)?));
+				}
+			}
 		}
 		let param = DrawParam::new();
-		// .dest(Point2::new(0.0, 0.0))
-		// .scale(Vector2::new(self.zoom, self.zoom));
-		if let Some(mesh) = &self.tiles_mesh {
-			mesh.draw(&mut self.ctx, param)?;
+		for mesh in &self.tiles_meshes {
+			match mesh {
+				Some(mesh) => mesh.draw(&mut self.ctx, param)?,
+				None => (),
+			}
 		}
 		Ok(())
 	}
