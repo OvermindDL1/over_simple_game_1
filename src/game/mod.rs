@@ -8,7 +8,7 @@ use ggez::graphics::{Color, DrawMode, DrawParam, Drawable, FilterMode, Rect, Ver
 use ggez::input::{keyboard, mouse};
 use ggez::nalgebra as na;
 use ggez::{graphics, Context, ContextBuilder, GameError};
-use shipyard::{AllStoragesViewMut, EntitiesView, EntityId, View, ViewMut};
+use shipyard::{AllStoragesViewMut, EntitiesView, EntityId, IntoIter, View, ViewMut};
 use winit::{
 	dpi, ElementState, Event, KeyboardInput, ModifiersState, MouseButton, MouseScrollDelta,
 	VirtualKeyCode, WindowEvent,
@@ -640,23 +640,34 @@ impl GameState {
 	}
 
 	fn draw_selection(&mut self, engine: &mut Engine<GameState>) -> anyhow::Result<()> {
-		if let Some(entity) = self.selected {
-			let (mut x, mut y) = engine.ecs.try_borrow::<View<Coord>>()?[entity].to_linear();
-			x *= self.scale.x;
-			y *= self.scale.y;
-			if None == self.selected_mesh {
-				self.selected_mesh = Some(graphics::Mesh::new_circle(
-					&mut self.ctx,
-					DrawMode::stroke(0.1),
-					na::Point2::new(0.0, 0.0),
-					1.0,
-					0.2,
-					graphics::WHITE,
-				)?);
-			}
-			if let Some(mesh) = &self.selected_mesh {
-				mesh.draw(&mut self.ctx, DrawParam::new().dest(na::Point2::new(x, y)))?;
-			}
+		if None == self.selected_mesh {
+			self.selected_mesh = Some(graphics::Mesh::new_circle(
+				&mut self.ctx,
+				DrawMode::stroke(0.1),
+				na::Point2::new(0.0, 0.0),
+				1.0,
+				0.2,
+				graphics::WHITE,
+			)?);
+		}
+		let selected_mesh = &self.selected_mesh;
+		let scale = &self.scale;
+		let ctx = &mut self.ctx;
+		if let Some(mesh) = selected_mesh {
+			engine.ecs.run(
+				|coords: View<Coord>,
+				 selected: View<components::IsSelected>|
+				 -> anyhow::Result<()> {
+					for (_, coord) in (&selected, &coords).iter() {
+						let (mut x, mut y) = coord.to_linear();
+						x *= scale.x;
+						y *= scale.y;
+						mesh.draw(ctx, DrawParam::new().dest(na::Point2::new(x, y)))?;
+					}
+
+					Ok(())
+				},
+			)?;
 		}
 		Ok(())
 	}
