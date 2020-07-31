@@ -24,7 +24,7 @@ impl MapGenerator for SimpleAlternationMapGenerator {
 	}
 }
 impl SimpleAlternationMapGenerator {
-	pub fn new<'a, NameIter: IntoIterator, IO: EngineIO>(
+	pub fn new<NameIter: IntoIterator, IO: EngineIO>(
 		engine: &mut Engine<IO>,
 		names: NameIter,
 	) -> Result<SimpleAlternationMapGenerator, anyhow::Error>

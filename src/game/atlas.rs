@@ -142,7 +142,7 @@ impl<ImageType, Unique: Copy> AtlasBuilder<ImageType, Unique> {
 						}
 					}
 				}
-				if let Some(_) = iter.next() {
+				if iter.next().is_some() {
 					return Err(AtlasError::SourceImageTooLargeError(name.into()));
 				}
 				let id = AtlasId(self.entries.len(), Default::default());
@@ -262,7 +262,7 @@ impl<ImageType, Unique: Copy> MultiAtlasBuilder<ImageType, Unique> {
 		F: FnMut(u16, u16, &[u8]) -> anyhow::Result<ImageType>,
 	{
 		let mut atlases = Vec::with_capacity(self.atlases.len());
-		for atlas in self.atlases.iter().filter(|a| a.entries.len() > 0) {
+		for atlas in self.atlases.iter().filter(|a| !a.entries.is_empty()) {
 			atlases.push(atlas.generate(generate_image)?);
 		}
 		atlases.shrink_to_fit();

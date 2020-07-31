@@ -60,9 +60,7 @@ impl EngineIO for DirectFilesystemSimpleIO {
 
 	type TileInterface = ();
 
-	fn blank_tile_interface() -> Self::TileInterface {
-		()
-	}
+	fn blank_tile_interface() -> Self::TileInterface {}
 
 	type TileAddedError = Infallible;
 
