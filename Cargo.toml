@@ -20,4 +20,6 @@ log4rs = { version = "0.13", features = ["all_components", "gzip", "file", "back
 guillotiere = "0.5"
 indexmap = "1.5"
 image = "0.22"
+proptest = "0.10"
+rand = "0.7"
 noise = "0.6"
