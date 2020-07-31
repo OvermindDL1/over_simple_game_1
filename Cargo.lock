@@ -568,6 +568,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "euclid"
+version = "0.20.14"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2bb7ef65b3777a325d1eeefefab5b6d4959da54747e33bd6258e789640f307ad"
+dependencies = [
+ "num-traits 0.2.12",
+]
+
+[[package]]
 name = "euclid_macros"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -912,12 +921,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "guillotiere"
+version = "0.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "47065d052e2f000066c4ffbea7051e55bff5c1532c400fc1e269492b2474ccc1"
+dependencies = [
+ "euclid 0.20.14",
+ "svg_fmt",
+]
+
+[[package]]
 name = "hashbrown"
 version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "96282e96bfcd3da0d3aa9938bedf1e50df3269b6db08b4876d2da0bb1a0841cf"
 dependencies = [
  "ahash",
+ "autocfg 1.0.0",
+]
+
+[[package]]
+name = "hashbrown"
+version = "0.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "34f595585f103464d8d2f6e9864682d74c1601fed5e07d62b1c9058dba8246fb"
+dependencies = [
  "autocfg 1.0.0",
 ]
 
@@ -958,7 +986,18 @@ dependencies = [
  "num-rational",
  "num-traits 0.2.12",
  "png",
+ "scoped_threadpool",
  "tiff",
+]
+
+[[package]]
+name = "indexmap"
+version = "1.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5b88cd59ee5f71fea89a62248fc8f387d44400cefe05ef548466d61ced9029a7"
+dependencies = [
+ "autocfg 1.0.0",
+ "hashbrown 0.8.1",
 ]
 
 [[package]]
@@ -999,6 +1038,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cc797adac5f083b8ff0ca6f6294a999393d76e197c36488e2ef732c4715f6fa3"
 dependencies = [
  "byteorder",
+ "rayon",
 ]
 
 [[package]]
@@ -1172,7 +1212,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bdb9bf1f1d43be9a9cc2343a7a096dc113cc25337a13e8f99721b01d1d548b60"
 dependencies = [
  "arrayvec 0.4.12",
- "euclid",
+ "euclid 0.19.9",
  "num-traits 0.2.12",
 ]
 
@@ -1492,6 +1532,9 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "ggez",
+ "guillotiere",
+ "image",
+ "indexmap",
  "log",
  "log4rs",
  "ron",
@@ -2030,6 +2073,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "scoped_threadpool"
+version = "0.1.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1d51f5df5af43ab3f1360b429fa5e0152ac5ce8c0bd6485cae490332e96846a8"
+
+[[package]]
 name = "scopeguard"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2125,7 +2174,7 @@ name = "shipyard"
 version = "0.4.0"
 source = "git+https://github.com/leudz/shipyard.git#5fbb7d25a691524dfe46f39b7bb5a6c13e488568"
 dependencies = [
- "hashbrown",
+ "hashbrown 0.7.2",
  "num_cpus",
  "parking_lot 0.10.2",
  "rayon",
@@ -2282,6 +2331,12 @@ name = "stdweb-internal-runtime"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "213701ba3370744dcd1a12960caa4843b3d68b4d1c0a5d575e0d65b2ee9d16c0"
+
+[[package]]
+name = "svg_fmt"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8fb1df15f412ee2e9dfc1c504260fa695c1c3f10fe9f4a6ee2d2184d7d6450e2"
 
 [[package]]
 name = "syn"
