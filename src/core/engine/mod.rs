@@ -12,6 +12,7 @@ use crate::core::map::tile_map::{TileMap, TileMapError};
 use std::fmt::Debug;
 
 use crate::core::engine::io::EngineIO;
+use indexmap::map::IndexMap;
 
 #[derive(Error, Debug)]
 pub enum EngineError<IO: EngineIO + 'static> {
@@ -39,7 +40,7 @@ pub enum EngineError<IO: EngineIO + 'static> {
 pub struct Engine<IO: EngineIO> {
 	pub ecs: shipyard::World,
 	pub tile_types: TileTypes<IO>,
-	pub maps: HashMap<String, TileMap>,
+	pub maps: IndexMap<String, TileMap>,
 }
 
 impl<IO: EngineIO> Engine<IO> {
@@ -52,7 +53,7 @@ impl<IO: EngineIO> Engine<IO> {
 		Engine {
 			ecs: shipyard::World::new(),
 			tile_types: TileTypes::new(),
-			maps: HashMap::new(),
+			maps: IndexMap::new(),
 		}
 	}
 

@@ -251,6 +251,11 @@ impl Iterator for CoordNeighborIterator {
 	}
 }
 
+pub struct MapCoord {
+	pub map: u32,
+	pub coord: Coord,
+}
+
 // #[cfg(test)]
 // mod coord_hex_tests {
 // 	#[test]
