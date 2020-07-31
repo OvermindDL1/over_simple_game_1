@@ -59,7 +59,6 @@ struct GameState {
 	visible_map: String,
 	screen_tiles: f32,
 	zoom: f32,
-	scale: na::Point2<f32>,
 	view_center: na::Point2<f32>,
 	screen_size: dpi::LogicalSize,
 	aspect_ratio: f32,
@@ -234,7 +233,6 @@ impl GameState {
 			visible_map: "world0".to_owned(),
 			screen_tiles: 2.0,
 			zoom: 2.0,
-			scale: na::Point2::from([1.0, 6.0 / 7.0]),
 			view_center: na::Point2::from([4.0, 4.0]),
 			screen_size: dpi::LogicalSize {
 				width: 1.0,
@@ -481,7 +479,6 @@ impl GameState {
 		let (map_x, map_y) = self.screen_ratio_to_map(screen_x, screen_y);
 		let coord = Coord::from_linear(map_x, map_y);
 		self.set_selected_coord(engine, coord)?;
-		dbg!(coord);
 		Ok(())
 	}
 
@@ -556,8 +553,8 @@ impl GameState {
 		let visible_height = self.screen_tiles;
 		let offset_x = (visible_width * 0.5) - self.view_center.x;
 		let offset_y = (visible_height * 0.5) - self.view_center.y;
-		let map_x = (screen_x * visible_width * self.scale.x) - offset_x;
-		let map_y = (screen_y * visible_height * self.scale.x) - offset_y;
+		let map_x = (screen_x * visible_width) - offset_x;
+		let map_y = (screen_y * visible_height) - offset_y;
 		(map_x, map_y)
 	}
 
@@ -623,8 +620,8 @@ impl GameState {
 				Coord::from_linear(self.view_center.x, self.view_center.y).iter_neighbors(radius)
 			{
 				let (px, py) = c.to_linear();
-				let px = px * self.scale.x;
-				let py = py * self.scale.y;
+				let px = px;
+				let py = py;
 				if let Some(tile) = tile_map.get_tile(c) {
 					let tile_drawable = &self.tiles_drawable[tile.id as usize];
 					let uv = self.tiles_atlas.get_entry(tile_drawable.atlas_id);
@@ -702,7 +699,6 @@ impl GameState {
 			)?);
 		}
 		let selected_mesh = &self.selected_mesh;
-		let scale = &self.scale;
 		let ctx = &mut self.ctx;
 		if let Some(mesh) = selected_mesh {
 			engine.ecs.run(
@@ -710,9 +706,7 @@ impl GameState {
 				 selected: View<components::IsSelected>|
 				 -> anyhow::Result<()> {
 					for (_, coord) in (&selected, &coords).iter() {
-						let (mut x, mut y) = coord.to_linear();
-						x *= scale.x;
-						y *= scale.y;
+						let (x, y) = coord.to_linear();
 						mesh.draw(ctx, DrawParam::new().dest(na::Point2::new(x, y)))?;
 					}
 

@@ -50,6 +50,9 @@ impl Coord {
 		Coord(x, z)
 	}
 
+	pub const CENTER_TO_POINT: f32 = 0.5773502691896258; //0.5/(TAU/12.0).cos(); // `cos` is not const capable for some reason...;
+	const SQRT3: f32 = 1.732050807568877; //3.0f32.sqrt(); // `sqrt` is not const capable either, why?!
+
 	/// Uses linear (pixel) coordinate to create a new `Coord`
 	///
 	/// Currently this just treats the hex tiles like they are offset rectangles,
@@ -64,6 +67,8 @@ impl Coord {
 	/// assert_eq!(Coord::from_linear(-1.0, 0.0), Coord::new_axial(-1, 0));
 	/// assert_eq!(Coord::from_linear(-0.5, -1.0), Coord::new_axial(0, -1));
 	/// assert_eq!(Coord::from_linear(-1.5, -1.0), Coord::new_axial(-1, -1));
+	/// let (x, y) = Coord::to_linear(Coord::new_axial(7, 28));
+	/// assert_eq!(Coord::from_linear(x, y), Coord::new_axial(7, 28));
 	/// ```
 	pub fn from_linear(x: f32, y: f32) -> Coord {
 		let s3 = 3.0f32.sqrt();
@@ -73,11 +78,30 @@ impl Coord {
 		Coord::new_axial((q - r) as i8, r as i8)
 	}
 
+	/// Get this hex coordinate in linear space where the point is centered on the hex coordinate.
+	///
+	/// Since hex tiles are pointy-top then their top height is 1.0 but the side width is a bit
+	/// thinner, about 0.8660254.
+	///
+	/// ```
+	/// # use assert_approx_eq::assert_approx_eq;
+	/// # use over_simple_game_1::core::map::coord::Coord;
+	/// let c00 = Coord::new_axial(0, 0).to_linear();
+	/// let c01 = Coord::new_axial(0, 1).to_linear();
+	/// let c02 = Coord::new_axial(0, 2).to_linear();
+	/// assert_approx_eq!(c00.0, 0.0);
+	/// assert_approx_eq!(c00.1, 0.0);
+	/// assert_approx_eq!(c01.0, 0.5);
+	/// assert_approx_eq!(c01.1, 0.8660254);
+	/// assert_approx_eq!(c02.0, 1.0);
+	/// assert_approx_eq!(c02.1, 1.7320508);
+	/// ```
 	pub fn to_linear(self) -> (f32, f32) {
 		let q = self.0 as f32;
 		let r = self.1 as f32;
-		let offset_x = r * 0.5;
-		(q + offset_x, r)
+		let x = Self::CENTER_TO_POINT * (Self::SQRT3 * q + Self::SQRT3 / 2.0 * r);
+		let y = Self::CENTER_TO_POINT * (3.0 / 2.0 * r);
+		(x, y)
 	}
 
 	pub fn q(&self) -> i8 {
@@ -258,17 +282,17 @@ pub struct MapCoord {
 
 #[cfg(test)]
 mod coord_tests {
-    use proptest::prelude::*;
+	use proptest::prelude::*;
 
-    proptest!(
-        #[test]
-        fn to_from_coord(q: i8, r: i8) {
-            let axial = super::Coord::new_axial(q, r);
+	proptest!(
+		#[test]
+		fn coord_to_linear_from_linear(q: i8, r: i8) {
+			let axial = super::Coord::new_axial(q, r);
 
-            let (x, y) = axial.to_linear();
-            let axial_to_from = super::Coord::from_linear(x, y);
+			let (x, y) = axial.to_linear();
+			let axial_to_from = super::Coord::from_linear(x, y);
 
-            assert_eq!((x, y, axial), (x, y, axial_to_from));
-        }
-    );
+			assert_eq!((x, y, axial), (x, y, axial_to_from));
+		}
+	);
 }
