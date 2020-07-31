@@ -514,7 +514,7 @@ impl GameState {
 		Ok(())
 	}
 
-	fn _set_selected_entity(&mut self, engine: &mut Engine<GameState>, entity: EntityId) {
+	fn set_selected_entity(&mut self, engine: &mut Engine<GameState>, entity: EntityId) {
 		engine.ecs.run(
 			|entities: EntitiesView, mut selected: ViewMut<components::IsSelected>| {
 				entities.add_component(&mut selected, components::IsSelected(), entity);
@@ -607,7 +607,6 @@ impl GameState {
 	fn draw_map(&mut self, engine: &mut Engine<GameState>) -> anyhow::Result<()> {
 		if self.tiles_meshes.is_empty() {
 			let mut mesh_builders: Vec<_> = (0..self.tiles_atlas.len_atlases())
-				.into_iter()
 				.map(|_| (false, graphics::MeshBuilder::new()))
 				.collect();
 
