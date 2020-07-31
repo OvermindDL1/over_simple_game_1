@@ -60,10 +60,7 @@ impl EngineIO for DirectFilesystemSimpleIO {
 
 	type TileInterface = ();
 
-	#[allow(clippy::unused_unit)]
-	fn blank_tile_interface() -> Self::TileInterface {
-		()
-	}
+	fn blank_tile_interface() -> Self::TileInterface {}
 
 	type TileAddedError = Infallible;
 

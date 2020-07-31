@@ -12,7 +12,7 @@ use ggez::nalgebra as na;
 use ggez::{graphics, Context, ContextBuilder, GameError};
 use log::*;
 use serde::{Deserialize, Serialize};
-use shipyard::{AllStoragesViewMut, EntitiesView, EntityId, IntoIter, View, ViewMut};
+use shipyard::*;
 use winit::{
 	dpi, ElementState, Event, KeyboardInput, ModifiersState, MouseButton, MouseScrollDelta,
 	VirtualKeyCode, WindowEvent,
@@ -99,10 +99,7 @@ impl EngineIO for GameState {
 
 	type TileInterface = ();
 
-	#[allow(clippy::unused_unit)]
-	fn blank_tile_interface() -> Self::TileInterface {
-		()
-	}
+	fn blank_tile_interface() -> Self::TileInterface {}
 
 	type TileAddedError = Infallible;
 
@@ -514,7 +511,7 @@ impl GameState {
 		Ok(())
 	}
 
-	fn set_selected_entity(&mut self, engine: &mut Engine<GameState>, entity: EntityId) {
+	fn _set_selected_entity(&mut self, engine: &mut Engine<GameState>, entity: EntityId) {
 		engine.ecs.run(
 			|entities: EntitiesView, mut selected: ViewMut<components::IsSelected>| {
 				entities.add_component(&mut selected, components::IsSelected(), entity);

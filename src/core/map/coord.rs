@@ -68,9 +68,9 @@ impl Coord {
     #[allow(clippy::many_single_char_names)]
 	pub fn from_linear(x: f32, y: f32) -> Coord {
 		let s3 = 3.0f32.sqrt();
-		let a = (x + s3 * y + 1.0).floor();
-		let q = (((2.0 * x + 1.0).floor() + a) / 3.0).floor();
-		let r = ((a + (-x + s3 * y + 1.0).floor()) / 3.0).floor();
+		let segment = (x + s3 * y + 1.0).floor();
+		let q = (((2.0 * x + 1.0).floor() + segment) / 3.0).floor();
+		let r = ((segment + (-x + s3 * y + 1.0).floor()) / 3.0).floor();
 		Coord::new_axial((q - r) as i8, r as i8)
 	}
 
