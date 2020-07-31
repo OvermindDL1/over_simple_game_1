@@ -65,20 +65,13 @@ impl Coord {
 	/// assert_eq!(Coord::from_linear(-0.5, -1.0), Coord::new_axial(0, -1));
 	/// assert_eq!(Coord::from_linear(-1.5, -1.0), Coord::new_axial(-1, -1));
 	/// ```
+    #[allow(clippy::many_single_char_names)]
 	pub fn from_linear(x: f32, y: f32) -> Coord {
-		// I think your brain might have been figting between whether linear
-		// coords are per tile width & height or just per width. The assert_eq!
-		// above don't imply sqrt(3) is relevant, and neither does to_linear
-
-		// TODO: test assert_eq!(from_linear(axis.to_linear()), axis)
-
-		// let s3 = 3.0f32.sqrt();
-		// let a = (x + s3 * y + 1.0).floor();
-		// let q = (((2.0 * x + 1.0).floor() + a) / 3.0).floor();
-		// let r = ((a + (-x + s3 * y + 1.0).floor()) / 3.0).floor();
-		// Coord::new_axial((q - r) as i8, r as i8)
-		let nq = x - (0.5 * y.floor());
-		Coord::new_axial(nq as i8, y as i8)
+		let s3 = 3.0f32.sqrt();
+		let a = (x + s3 * y + 1.0).floor();
+		let q = (((2.0 * x + 1.0).floor() + a) / 3.0).floor();
+		let r = ((a + (-x + s3 * y + 1.0).floor()) / 3.0).floor();
+		Coord::new_axial((q - r) as i8, r as i8)
 	}
 
 	pub fn to_linear(self) -> (f32, f32) {
