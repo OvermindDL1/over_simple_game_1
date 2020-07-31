@@ -1,7 +1,8 @@
 use crate::core::engine::io::EngineIO;
+use crate::core::structures::typed_index_map::TypedIndexMap;
 use serde::{Deserialize, Serialize};
 use shipyard::EntityId;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use thiserror::*;
 
 pub type TileIdx = u16;
@@ -27,10 +28,11 @@ pub struct TileType<IO: EngineIO> {
 	pub interface: IO::TileInterface,
 }
 
+pub enum TileTypesMap {}
+
 #[derive(Debug)]
 pub struct TileTypes<IO: EngineIO> {
-	pub tile_types: Vec<TileType<IO>>,
-	pub lookup: HashMap<String, TileIdx>,
+	pub tile_types: TypedIndexMap<TileTypesMap, String, TileType<IO>>,
 }
 
 #[derive(Error, Debug)]
@@ -75,8 +77,7 @@ where
 impl<IO: EngineIO> TileTypes<IO> {
 	pub(crate) fn new() -> TileTypes<IO> {
 		TileTypes {
-			tile_types: Vec::new(),
-			lookup: HashMap::new(),
+			tile_types: TypedIndexMap::new(),
 		}
 
 		// let _ = tile_datas.get_index("unknown")?;
@@ -90,7 +91,7 @@ impl<IO: EngineIO> TileTypes<IO> {
 		if tile_type.name.is_empty() {
 			return Err(TileTypesError::InvalidTileTypeData("name is empty".into()));
 		}
-		if self.lookup.contains_key(&tile_type.name) {
+		if self.tile_types.contains_key(&tile_type.name) {
 			return Err(TileTypesError::DuplicateTileTypeName(tile_type.name));
 		}
 
@@ -101,8 +102,7 @@ impl<IO: EngineIO> TileTypes<IO> {
 
 		io.tile_added(idx, &mut tile_type)
 			.map_err(|source| TileTypesError::EngineIORegisterTileError { source })?;
-		self.lookup.insert(tile_type.name.clone(), idx as TileIdx);
-		self.tile_types.push(tile_type);
+		self.tile_types.insert(tile_type.name.clone(), tile_type);
 		Ok(())
 	}
 

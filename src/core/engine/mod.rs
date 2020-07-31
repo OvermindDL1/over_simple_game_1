@@ -1,7 +1,5 @@
 pub mod io;
 
-use std::collections::HashMap;
-
 use thiserror::*;
 
 use crate::core::map::generator::MapGenerator;

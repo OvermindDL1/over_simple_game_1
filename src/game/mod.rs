@@ -20,6 +20,7 @@ use winit::{
 
 use crate::game::atlas::{AtlasId, MultiAtlas, MultiAtlasBuilder};
 use over_simple_game_1::core::map::generator::SimpleAlternationMapGenerator;
+use over_simple_game_1::games::civ;
 use over_simple_game_1::prelude::*;
 
 mod components;
@@ -169,6 +170,7 @@ impl Game {
 		self.state.setup(&mut self.engine)?;
 		let mut generator =
 			SimpleAlternationMapGenerator::new(&mut self.engine, &["dirt", "grass", "sand"])?;
+		// let mut generator = civ::maps::NoiseMap::new(&self.engine.tile_types);
 		let name = self.state.visible_map.clone();
 		self.engine
 			.generate_map(&mut self.state, name, 7, 7, false, &mut generator)?;
@@ -252,7 +254,7 @@ impl GameState {
 		self.tiles_drawable
 			.reserve(engine.tile_types.tile_types.len());
 		let mut tile_atlas_builder = MultiAtlasBuilder::new(2048, 2048);
-		for name in engine.tile_types.tile_types.iter().map(|t| &t.name) {
+		for name in engine.tile_types.tile_types.values().map(|t| &t.name) {
 			let ctx = &mut self.ctx;
 			let id = tile_atlas_builder.get_or_create_with(name, || {
 				use std::io::Read;
