@@ -251,9 +251,19 @@ impl Iterator for CoordNeighborIterator {
 	}
 }
 
-// #[cfg(test)]
-// mod coord_hex_tests {
-// 	#[test]
-// 	fn from_linear_test() {
-// 	}
-// }
+#[cfg(test)]
+mod coord_tests {
+    use proptest::prelude::*;
+
+    proptest!(
+        #[test]
+        fn to_from_coord(q: i8, r: i8) {
+            let axial = super::Coord::new_axial(q, r);
+
+            let (x, y) = axial.to_linear();
+            let axial_to_from = super::Coord::from_linear(x, y);
+
+            assert_eq!((x, y, axial), (x, y, axial_to_from));
+        }
+    );
+}
