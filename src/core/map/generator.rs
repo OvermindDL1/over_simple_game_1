@@ -36,10 +36,10 @@ impl SimpleAlternationMapGenerator {
 			let name: &str = name.as_ref();
 			let idx = engine
 				.tile_types
-				.lookup
-				.get(name)
-				.cloned()
-				.with_context(|| format!("missing tile type: {}", name))?;
+				.tile_types
+				.get_index_of(name)
+				.with_context(|| format!("missing tile type: {}", name))?
+				.index() as u16;
 			tiles.push(idx)
 		}
 		Ok(SimpleAlternationMapGenerator(tiles))
