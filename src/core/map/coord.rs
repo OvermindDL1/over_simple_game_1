@@ -328,4 +328,41 @@ mod coord_tests {
 	//         prop_assert_ne!(coord.idx(max_x, max_z, true), None);
 	//     }
 	// );
+
+	proptest!(
+		#[test]
+		fn six_rights_make_itself(coord in rand_coord_strategy()) {
+			prop_assert_eq!(
+				coord.cw().cw().cw().cw().cw().cw(),
+				coord
+			);
+		}
+	);
+
+	proptest!(
+		#[test]
+		fn six_lefts_make_itself(coord in rand_coord_strategy()) {
+			prop_assert_eq!(
+				coord.ccw().ccw().ccw().ccw().ccw().ccw(),
+				coord
+			);
+		}
+	);
+
+	proptest!(
+		#[test]
+		fn three_lefts_make_three_rights(coord in rand_coord_strategy()) {
+			prop_assert_eq!(
+				coord.ccw().ccw().ccw(),
+				coord.cw().cw().cw()
+			);
+		}
+	);
+
+	proptest!(
+		#[test]
+		fn three_rights_negate(coord in rand_coord_strategy()) {
+			prop_assert_eq!(coord.cw().cw().cw(), -coord);
+		}
+	);
 }
