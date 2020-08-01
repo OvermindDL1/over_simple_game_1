@@ -283,20 +283,21 @@ pub struct MapCoord {
 #[cfg(test)]
 mod coord_tests {
 	use proptest::prelude::*;
+    use super::*;
 
-	fn rand_coord_strategy() -> BoxedStrategy<super::Coord> {
+	fn rand_coord_strategy() -> BoxedStrategy<Coord> {
 		(any::<i8>(), any::<i8>())
-			.prop_map(|(q, r)| super::Coord::new_axial(q, r))
+			.prop_map(|(q, r)| Coord::new_axial(q, r))
 			.boxed()
 	}
 
 	proptest!(
 		#[test]
 		fn coord_to_linear_from_linear(q: i8, r: i8) {
-			let axial = super::Coord::new_axial(q, r);
+			let axial = Coord::new_axial(q, r);
 
 			let (x, y) = axial.to_linear();
-			let axial_to_from = super::Coord::from_linear(x, y);
+			let axial_to_from = Coord::from_linear(x, y);
 
 			prop_assert_eq!((x, y, axial), (x, y, axial_to_from));
 		}
