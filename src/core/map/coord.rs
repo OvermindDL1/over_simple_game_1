@@ -284,6 +284,12 @@ pub struct MapCoord {
 mod coord_tests {
 	use proptest::prelude::*;
 
+	fn rand_coord_strategy() -> BoxedStrategy<super::Coord> {
+		(any::<i8>(), any::<i8>())
+			.prop_map(|(q, r)| super::Coord::new_axial(q, r))
+			.boxed()
+	}
+
 	proptest!(
 		#[test]
 		fn coord_to_linear_from_linear(q: i8, r: i8) {
@@ -292,7 +298,19 @@ mod coord_tests {
 			let (x, y) = axial.to_linear();
 			let axial_to_from = super::Coord::from_linear(x, y);
 
-			assert_eq!((x, y, axial), (x, y, axial_to_from));
+			prop_assert_eq!((x, y, axial), (x, y, axial_to_from));
+		}
+	);
+
+	proptest!(
+		#[test]
+		fn sum_xyz(coord in rand_coord_strategy()) {
+			prop_assert_eq!(
+				coord.x().wrapping_add(
+				coord.y().wrapping_add(
+				coord.z())),
+				0
+			);
 		}
 	);
 }
