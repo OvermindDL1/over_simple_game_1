@@ -282,8 +282,8 @@ pub struct MapCoord {
 
 #[cfg(test)]
 mod coord_tests {
+	use super::*;
 	use proptest::prelude::*;
-    use super::*;
 
 	fn rand_coord_strategy() -> BoxedStrategy<Coord> {
 		(any::<i8>(), any::<i8>())
@@ -314,4 +314,18 @@ mod coord_tests {
 			);
 		}
 	);
+
+	// I think this should work, but that will require wrapping z and
+	// negative coords working. TODO: uncomment when fully implemented
+	//
+	// proptest!(
+	//     #[test]
+	//     fn wrapping_get_always_returns(
+	//         coord in rand_coord_strategy(),
+	//         max_x: u8,
+	//         max_z: u8
+	//     ) {
+	//         prop_assert_ne!(coord.idx(max_x, max_z, true), None);
+	//     }
+	// );
 }
