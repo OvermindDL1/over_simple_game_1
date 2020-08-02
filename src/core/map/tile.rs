@@ -166,3 +166,35 @@ impl<IO: EngineIO> TileTypes<IO> {
 	// 	Ok(idx as TileIdx)
 	// }
 }
+
+#[cfg(test)]
+mod tile_tests {
+    use super::*;
+    use std::{convert::Infallible, path::PathBuf};
+
+    #[derive(Debug)]
+    struct DummyIO {}
+
+    impl EngineIO for DummyIO {
+        type ReadError = Infallible;
+        type Read = &'static [u8];
+
+        fn read(&mut self, _: PathBuf) -> Result<Self::Read, Self::ReadError> {
+            Ok(b"")
+        }
+
+        type TileInterface = ();
+
+        fn blank_tile_interface() -> Self::TileInterface {}
+
+        type TileAddedError = Infallible;
+
+        fn tile_added(
+            &mut self,
+            _: usize,
+            _: &mut TileType<Self>,
+        ) -> Result<(), Self::TileAddedError> {
+            Ok(())
+        }
+    }
+}
