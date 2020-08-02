@@ -171,6 +171,7 @@ impl<IO: EngineIO> TileTypes<IO> {
 mod tile_tests {
     use super::*;
     use std::{convert::Infallible, path::PathBuf};
+    use proptest::prelude::*;
 
     #[derive(Debug)]
     struct DummyIO {}
@@ -196,5 +197,11 @@ mod tile_tests {
         ) -> Result<(), Self::TileAddedError> {
             Ok(())
         }
+    }
+
+    fn rand_dummy_tiletype_strategy() -> BoxedStrategy<TileType<DummyIO>> {
+        any::<String>()
+            .prop_map(|s| TileType{name: s, interface: ()})
+            .boxed()
     }
 }
