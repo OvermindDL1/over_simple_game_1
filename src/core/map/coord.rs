@@ -282,17 +282,87 @@ pub struct MapCoord {
 
 #[cfg(test)]
 mod coord_tests {
+	use super::*;
 	use proptest::prelude::*;
+
+	fn rand_coord_strategy() -> BoxedStrategy<Coord> {
+		(any::<i8>(), any::<i8>())
+			.prop_map(|(q, r)| Coord::new_axial(q, r))
+			.boxed()
+	}
 
 	proptest!(
 		#[test]
 		fn coord_to_linear_from_linear(q: i8, r: i8) {
-			let axial = super::Coord::new_axial(q, r);
+			let axial = Coord::new_axial(q, r);
 
 			let (x, y) = axial.to_linear();
-			let axial_to_from = super::Coord::from_linear(x, y);
+			let axial_to_from = Coord::from_linear(x, y);
 
-			assert_eq!((x, y, axial), (x, y, axial_to_from));
+			prop_assert_eq!((x, y, axial), (x, y, axial_to_from));
+		}
+	);
+
+	proptest!(
+		#[test]
+		fn sum_xyz(coord in rand_coord_strategy()) {
+			prop_assert_eq!(
+				coord.x().wrapping_add(
+				coord.y().wrapping_add(
+				coord.z())),
+				0
+			);
+		}
+	);
+
+	// I think this should work, but that will require wrapping z and
+	// negative coords working. TODO: uncomment when fully implemented
+	//
+	// proptest!(
+	//     #[test]
+	//     fn wrapping_get_always_returns(
+	//         coord in rand_coord_strategy(),
+	//         max_x: u8,
+	//         max_z: u8
+	//     ) {
+	//         prop_assert_ne!(coord.idx(max_x, max_z, true), None);
+	//     }
+	// );
+
+	proptest!(
+		#[test]
+		fn six_rights_make_itself(coord in rand_coord_strategy()) {
+			prop_assert_eq!(
+				coord.cw().cw().cw().cw().cw().cw(),
+				coord
+			);
+		}
+	);
+
+	proptest!(
+		#[test]
+		fn six_lefts_make_itself(coord in rand_coord_strategy()) {
+			prop_assert_eq!(
+				coord.ccw().ccw().ccw().ccw().ccw().ccw(),
+				coord
+			);
+		}
+	);
+
+	proptest!(
+		#[test]
+		fn three_lefts_make_three_rights(coord in rand_coord_strategy()) {
+			prop_assert_eq!(
+				coord.ccw().ccw().ccw(),
+				coord.cw().cw().cw()
+			);
+		}
+	);
+
+	proptest!(
+		#[test]
+		fn three_rights_negate(coord in rand_coord_strategy()) {
+			prop_assert_eq!(coord.cw().cw().cw(), -coord);
 		}
 	);
 }
