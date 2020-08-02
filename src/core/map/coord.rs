@@ -141,26 +141,8 @@ impl Coord {
 		Some((z * max_x as usize) + x)
 	}
 
-	pub fn scale(self, scale: i8) -> Coord {
-		Coord(self.0.wrapping_mul(scale), self.1.wrapping_mul(scale))
-	}
-
-	pub fn cw(self) -> Coord {
-		let (x, y, z) = (-self).to_cubic_tuple();
-		Coord::new_cubic(z, x, y)
-	}
-
-	pub fn ccw(self) -> Coord {
-		let (x, y, z) = (-self).to_cubic_tuple();
-		Coord::new_cubic(y, z, x)
-	}
-
-	pub fn cw_offset(self, center: Coord) -> Coord {
-		(center - self).cw() + center
-	}
-
-	pub fn ccw_offset(self, center: Coord) -> Coord {
-		(center - self).ccw() + center
+	pub fn as_coord_orientation(self) -> CoordOrientation {
+		CoordOrientation(self.0, self.1)
 	}
 
 	pub fn iter_neighbors_ring(self, distance: i8) -> CoordRingIterator {
@@ -172,33 +154,33 @@ impl Coord {
 	}
 }
 
-impl Add for Coord {
+impl Add<CoordOrientation> for Coord {
 	type Output = Coord;
 
-	fn add(self, rhs: Self) -> Self::Output {
+	fn add(self, rhs: CoordOrientation) -> Self::Output {
 		Coord(self.0.wrapping_add(rhs.0), self.1.wrapping_add(rhs.1))
 	}
 }
 
-impl Sub for Coord {
+impl Sub<CoordOrientation> for Coord {
 	type Output = Coord;
 
-	fn sub(self, rhs: Self) -> Self::Output {
+	fn sub(self, rhs: CoordOrientation) -> Self::Output {
 		Coord(self.0.wrapping_sub(rhs.0), self.1.wrapping_sub(rhs.1))
 	}
 }
 
-impl Neg for Coord {
-	type Output = Coord;
+impl Sub<Coord> for Coord {
+	type Output = CoordOrientation;
 
-	fn neg(self) -> Self::Output {
-		Coord(-self.0, -self.1)
+	fn sub(self, rhs: Coord) -> Self::Output {
+		CoordOrientation(self.0.wrapping_sub(rhs.0), self.1.wrapping_sub(rhs.1))
 	}
 }
 
 pub struct CoordRingIterator {
 	point: Option<Coord>,
-	side: Coord,
+	side: CoordOrientation,
 	distance: i8,
 	offset: i8,
 }
@@ -208,12 +190,12 @@ impl CoordRingIterator {
 		if distance == 0 {
 			CoordRingIterator {
 				point: Some(center),
-				side: Coord(-1, 1).ccw(),
+				side: CoordOrientation(-1, 1).ccw(),
 				distance: 0,
 				offset: 0,
 			}
 		} else {
-			let side = Coord(1, 0);
+			let side = CoordOrientation(1, 0);
 			CoordRingIterator {
 				point: Some(center + side.scale(distance)),
 				side: (-side).ccw(),
@@ -232,7 +214,7 @@ impl Iterator for CoordRingIterator {
 		if self.offset >= self.distance {
 			self.offset = 1;
 			self.side = self.side.cw();
-			if self.side == Coord(-1, 1) {
+			if self.side == CoordOrientation(-1, 1) {
 				self.point = None;
 			} else {
 				self.point = Some(point)
@@ -275,6 +257,126 @@ impl Iterator for CoordNeighborIterator {
 	}
 }
 
+#[derive(Clone, Copy, Default, Debug, Hash, PartialOrd, PartialEq, Ord, Eq)]
+pub struct CoordOrientation(i8, i8);
+
+impl CoordOrientation {
+	/// Uses axial coordinates to create a new `CoordOrientation`
+	///
+	/// Axial coordinate, 0,0 is top-left, 255,255 is bottom-right.
+	///
+	/// ```
+	/// let coord = over_simple_game_1::core::map::coord::Coord::new_axial(0, 1);
+	/// assert_eq!(coord.q(), 0);
+	/// assert_eq!(coord.r(), 1);
+	/// ```
+	pub fn new_axial(q: i8, r: i8) -> CoordOrientation {
+		CoordOrientation(q, r)
+	}
+
+	/// Uses cubic coordinates to create a new `CoordOrientation`
+	///
+	/// cubic coordinates are the 3 axis of a 3d Cube, though constrained to the diagonal plane as
+	/// `x + y + z = 0`.
+	///
+	/// ```
+	/// let coord = over_simple_game_1::core::map::coord::Coord::new_axial(0, 1);
+	/// assert_eq!(coord.x(), 0);
+	/// assert_eq!(coord.y(), -1);
+	/// assert_eq!(coord.z(), 1);
+	/// ```
+	pub fn new_cubic(x: i8, y: i8, z: i8) -> CoordOrientation {
+		assert_eq!(x.wrapping_add(y).wrapping_add(z), 0);
+		CoordOrientation(x, z)
+	}
+
+	pub fn q(&self) -> i8 {
+		self.0
+	}
+
+	pub fn r(&self) -> i8 {
+		self.1
+	}
+
+	pub fn to_axial_tuple(&self) -> (i8, i8) {
+		(self.q(), self.r())
+	}
+
+	pub fn x(&self) -> i8 {
+		self.0
+	}
+
+	pub fn y(&self) -> i8 {
+		self.0.wrapping_neg().wrapping_sub(self.1)
+	}
+
+	pub fn z(&self) -> i8 {
+		self.1
+	}
+
+	pub fn to_cubic_tuple(&self) -> (i8, i8, i8) {
+		(self.x(), self.y(), self.z())
+	}
+
+	pub fn scale(self, scale: i8) -> CoordOrientation {
+		CoordOrientation(self.0.wrapping_mul(scale), self.1.wrapping_mul(scale))
+	}
+
+	pub fn cw(self) -> CoordOrientation {
+		let (x, y, z) = (-self).to_cubic_tuple();
+		CoordOrientation::new_cubic(z, x, y)
+	}
+
+	pub fn ccw(self) -> CoordOrientation {
+		let (x, y, z) = (-self).to_cubic_tuple();
+		CoordOrientation::new_cubic(y, z, x)
+	}
+
+	pub fn as_coord(self) -> Coord {
+		Coord(self.0, self.1)
+	}
+}
+
+impl Add for CoordOrientation {
+	type Output = CoordOrientation;
+
+	fn add(self, rhs: Self) -> Self::Output {
+		CoordOrientation(self.0.wrapping_add(rhs.0), self.1.wrapping_add(rhs.1))
+	}
+}
+
+impl Sub for CoordOrientation {
+	type Output = CoordOrientation;
+
+	fn sub(self, rhs: Self) -> Self::Output {
+		CoordOrientation(self.0.wrapping_sub(rhs.0), self.1.wrapping_sub(rhs.1))
+	}
+}
+
+impl Add<Coord> for CoordOrientation {
+	type Output = Coord;
+
+	fn add(self, rhs: Coord) -> Self::Output {
+		Coord(self.0.wrapping_add(rhs.0), self.1.wrapping_add(rhs.1))
+	}
+}
+
+impl Sub<Coord> for CoordOrientation {
+	type Output = Coord;
+
+	fn sub(self, rhs: Coord) -> Self::Output {
+		Coord(self.0.wrapping_sub(rhs.0), self.1.wrapping_sub(rhs.1))
+	}
+}
+
+impl Neg for CoordOrientation {
+	type Output = CoordOrientation;
+
+	fn neg(self) -> Self::Output {
+		CoordOrientation(self.0.wrapping_neg(), self.1.wrapping_neg())
+	}
+}
+
 pub struct MapCoord {
 	pub map: u32,
 	pub coord: Coord,
@@ -288,6 +390,12 @@ mod coord_tests {
 	fn rand_coord_strategy() -> BoxedStrategy<Coord> {
 		(any::<i8>(), any::<i8>())
 			.prop_map(|(q, r)| Coord::new_axial(q, r))
+			.boxed()
+	}
+
+	fn rand_coord_orientation_strategy() -> BoxedStrategy<CoordOrientation> {
+		(any::<i8>(), any::<i8>())
+			.prop_map(|(q, r)| CoordOrientation::new_axial(q, r))
 			.boxed()
 	}
 
@@ -313,25 +421,31 @@ mod coord_tests {
 				0
 			);
 		}
-	);
 
-	// I think this should work, but that will require wrapping z and
-	// negative coords working. TODO: uncomment when fully implemented
-	//
-	// proptest!(
-	//     #[test]
-	//     fn wrapping_get_always_returns(
-	//         coord in rand_coord_strategy(),
-	//         max_x: u8,
-	//         max_z: u8
-	//     ) {
-	//         prop_assert_ne!(coord.idx(max_x, max_z, true), None);
-	//     }
-	// );
+		#[test]
+		fn sum_xyz_orientation(coord in rand_coord_orientation_strategy()) {
+			prop_assert_eq!(
+				coord.x().wrapping_add(
+				coord.y().wrapping_add(
+				coord.z())),
+				0
+			);
+		}
+	);
 
 	proptest!(
 		#[test]
-		fn six_rights_make_itself(coord in rand_coord_strategy()) {
+		fn wrapping_get_always_returns_when_wrapping(
+			coord in rand_coord_strategy(),
+			max_x: u8
+		) {
+			prop_assert_ne!(coord.idx(max_x, 255, true), None);
+		}
+	);
+
+	proptest!(
+		#[test]
+		fn six_rights_make_itself(coord in rand_coord_orientation_strategy()) {
 			prop_assert_eq!(
 				coord.cw().cw().cw().cw().cw().cw(),
 				coord
@@ -341,7 +455,7 @@ mod coord_tests {
 
 	proptest!(
 		#[test]
-		fn six_lefts_make_itself(coord in rand_coord_strategy()) {
+		fn six_lefts_make_itself(coord in rand_coord_orientation_strategy()) {
 			prop_assert_eq!(
 				coord.ccw().ccw().ccw().ccw().ccw().ccw(),
 				coord
@@ -351,7 +465,7 @@ mod coord_tests {
 
 	proptest!(
 		#[test]
-		fn three_lefts_make_three_rights(coord in rand_coord_strategy()) {
+		fn three_lefts_make_three_rights(coord in rand_coord_orientation_strategy()) {
 			prop_assert_eq!(
 				coord.ccw().ccw().ccw(),
 				coord.cw().cw().cw()
@@ -361,7 +475,7 @@ mod coord_tests {
 
 	proptest!(
 		#[test]
-		fn three_rights_negate(coord in rand_coord_strategy()) {
+		fn three_rights_negate(coord in rand_coord_orientation_strategy()) {
 			prop_assert_eq!(coord.cw().cw().cw(), -coord);
 		}
 	);
