@@ -208,6 +208,12 @@ mod tile_tests {
 			.boxed()
 	}
 
+    fn non_empty_tiletype_strategy() -> BoxedStrategy<TileType<DummyIO>> {
+        rand_dummy_tiletype_strategy()
+            .prop_filter("empty tiletype", |t| t.name != "")
+            .boxed()
+    }
+
 	proptest!(
 		#[test]
 		fn first_tiletype_should_be_unique(tt in rand_dummy_tiletype_strategy()) {
@@ -218,4 +224,16 @@ mod tile_tests {
 			}
 		}
 	);
+
+    proptest!(
+        #[test]
+        fn non_empty_tiletypes_are_valid(tt in non_empty_tiletype_strategy()) {
+			let mut dummy_io = DummyIO::default();
+			let mut tts = TileTypes::new();
+            let name = tt.name.clone();     // I really don't want to do this, but add_tile consumes
+			if let Err(TileTypesError::InvalidTileTypeData(s)) = tts.add_tile(&mut dummy_io, tt) {
+				prop_assert!(false, "TileType {} marked invalid because {}", name, s);
+			}
+        }
+    );
 }
