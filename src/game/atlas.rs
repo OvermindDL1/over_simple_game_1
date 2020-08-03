@@ -2,8 +2,8 @@
 
 use guillotiere::{AllocId, Allocation, AllocatorOptions, AtlasAllocator, Size};
 use indexmap::map::IndexMap;
-use std::marker::PhantomData;
 use std::collections::HashMap;
+use std::marker::PhantomData;
 use thiserror::*;
 
 #[derive(Error, Debug)]

@@ -169,39 +169,56 @@ impl<IO: EngineIO> TileTypes<IO> {
 
 #[cfg(test)]
 mod tile_tests {
-    use super::*;
-    use std::{convert::Infallible, path::PathBuf};
-    use proptest::prelude::*;
+	use super::*;
+	use proptest::prelude::*;
+	use std::{convert::Infallible, path::PathBuf};
 
-    #[derive(Debug)]
-    struct DummyIO {}
+	#[derive(Debug, Default)]
+	struct DummyIO {}
 
-    impl EngineIO for DummyIO {
-        type ReadError = Infallible;
-        type Read = &'static [u8];
+	impl EngineIO for DummyIO {
+		type ReadError = Infallible;
+		type Read = &'static [u8];
 
-        fn read(&mut self, _: PathBuf) -> Result<Self::Read, Self::ReadError> {
-            Ok(b"")
-        }
+		fn read(&mut self, _: PathBuf) -> Result<Self::Read, Self::ReadError> {
+			Ok(b"")
+		}
 
-        type TileInterface = ();
+		type TileInterface = ();
 
-        fn blank_tile_interface() -> Self::TileInterface {}
+		fn blank_tile_interface() -> Self::TileInterface {}
 
-        type TileAddedError = Infallible;
+		type TileAddedError = Infallible;
 
-        fn tile_added(
-            &mut self,
-            _: usize,
-            _: &mut TileType<Self>,
-        ) -> Result<(), Self::TileAddedError> {
-            Ok(())
-        }
-    }
+		fn tile_added(
+			&mut self,
+			_: usize,
+			_: &mut TileType<Self>,
+		) -> Result<(), Self::TileAddedError> {
+			Ok(())
+		}
+	}
 
-    fn rand_dummy_tiletype_strategy() -> BoxedStrategy<TileType<DummyIO>> {
-        any::<String>()
-            .prop_map(|s| TileType{name: s, interface: ()})
-            .boxed()
-    }
+	fn rand_dummy_tiletype_strategy() -> BoxedStrategy<TileType<DummyIO>> {
+		any::<String>()
+			.prop_map(|s| TileType {
+				name: s,
+				interface: (),
+			})
+			.boxed()
+	}
+
+	proptest!(
+		#[test]
+		fn first_tiletype_should_be_unique(tt in rand_dummy_tiletype_strategy()) {
+			let mut dummy_io = DummyIO::default();
+			let mut tts = TileTypes::new();
+			let _ = tts.add_tile(&mut dummy_io, tt).map_or_else(
+				|e| if let TileTypesError::DuplicateTileTypeName(_) = e {
+					panic!()
+				},
+				|_| ()
+			);
+		}
+	);
 }
