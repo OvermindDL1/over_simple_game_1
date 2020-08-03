@@ -1,6 +1,7 @@
-use crate::core::map::coord::Coord;
+use crate::core::map::coord::{Coord, MapCoord};
 use crate::core::map::generator::MapGenerator;
 use crate::core::map::tile::Tile;
+use shipyard::EntityId;
 use thiserror::*;
 
 #[derive(Error, Debug)]

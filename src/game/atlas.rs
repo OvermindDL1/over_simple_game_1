@@ -54,6 +54,14 @@ impl<Unique: Copy> AtlasEntry<Unique> {
 		self.max[1]
 	}
 
+	pub fn width(&self) -> f32 {
+		self.max[0] - self.min[0]
+	}
+
+	pub fn height(&self) -> f32 {
+		self.max[1] - self.min[1]
+	}
+
 	pub fn get_id(&self) -> AtlasId<Unique> {
 		self.id
 	}
@@ -295,5 +303,9 @@ impl<ImageType, Unique: Copy> MultiAtlas<ImageType, Unique> {
 			return None;
 		}
 		Some(&self.atlases[id].image)
+	}
+
+	pub fn get_entry_by_name(&self, name: &str) -> Option<&AtlasEntry<Unique>> {
+		self.entries.get(name)
 	}
 }

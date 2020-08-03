@@ -1,7 +1,9 @@
+#[macro_use]
 pub mod core;
 pub mod games;
 
 pub mod prelude {
+	pub use crate::core::component::ComponentAutoLoadable;
 	pub use crate::core::engine::io::EngineIO;
 	pub use crate::core::engine::Engine;
 	pub use crate::core::map::coord::Coord;

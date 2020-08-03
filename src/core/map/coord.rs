@@ -1,3 +1,5 @@
+use crate::core::engine::IndexMaps;
+use crate::core::structures::typed_index_map::TypedIndexMapIndex;
 use std::ops::{Add, Neg, Sub};
 
 /// Hex Coordinates, cubic notation but axial stored.
@@ -377,8 +379,9 @@ impl Neg for CoordOrientation {
 	}
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 pub struct MapCoord {
-	pub map: u32,
+	pub map: TypedIndexMapIndex<IndexMaps>,
 	pub coord: Coord,
 }
 
