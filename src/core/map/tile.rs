@@ -219,8 +219,8 @@ mod tile_tests {
 		fn first_tiletype_should_be_unique(tt in rand_dummy_tiletype_strategy()) {
 			let mut dummy_io = DummyIO::default();
 			let mut tts = TileTypes::new();
-			if let Err(TileTypesError::DuplicateTileTypeName(_)) = tts.add_tile(&mut dummy_io, tt) {
-				prop_assert!(false);
+			if let Err(TileTypesError::DuplicateTileTypeName(s)) = tts.add_tile(&mut dummy_io, tt) {
+				prop_assert!(false, "TileType {} marked as duplicate, but it is the only one added", s);
 			}
 		}
 	);
