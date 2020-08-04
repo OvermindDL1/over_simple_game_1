@@ -19,14 +19,20 @@ use winit::{
 };
 
 use crate::game::atlas::{AtlasId, MultiAtlas, MultiAtlasBuilder};
+use crate::game::components::DrawSprite;
+use ggez::graphics::spritebatch::SpriteBatch;
+use over_simple_game_1::core::map::coord::MapCoord;
 use over_simple_game_1::core::map::generator::SimpleAlternationMapGenerator;
-use over_simple_game_1::games::civ;
+use over_simple_game_1::games::civ::CivGame;
 use over_simple_game_1::prelude::*;
 
 mod components;
 
 #[derive(Clone, Copy, Debug)]
 enum MapAtlas {}
+
+#[derive(Clone, Copy, Debug)]
+enum EntityAtlas {}
 
 fn serde_hex_bound() -> Rect {
 	Rect {
@@ -65,13 +71,17 @@ struct GameState {
 	tiles_atlas: MultiAtlas<graphics::Image, MapAtlas>,
 	tiles_meshes: Vec<Option<graphics::Mesh>>,
 	tiles_drawable: Vec<TilesDrawable>,
+	entity_atlas: MultiAtlas<graphics::Image, EntityAtlas>,
+	entity_spritebatches: Vec<SpriteBatch>,
 	selected: Option<EntityId>,
 	selected_mesh: Option<graphics::Mesh>,
 }
 
 pub struct Game {
 	state: GameState,
+	ecs: shipyard::World,
 	engine: Engine<GameState>,
+	civ: CivGame,
 	events_loop: ggez::event::EventsLoop,
 	// gamepad_enabled: bool,
 }
@@ -154,11 +164,15 @@ impl Game {
 		// let gamepad_enabled = conf.modules.gamepad;
 
 		let state = GameState::new(ctx);
+		let ecs = shipyard::World::new();
 		let engine = Engine::new();
+		let civ = CivGame::new("/civ");
 
 		Ok(Game {
 			state,
+			ecs,
 			engine,
+			civ,
 			events_loop,
 			// gamepad_enabled,
 		})
@@ -174,6 +188,34 @@ impl Game {
 		self.engine
 			.generate_map(&mut self.state, name, 7, 7, false, &mut generator)?;
 
+		let coord = MapCoord {
+			map: self
+				.engine
+				.maps
+				.get_index_of(&self.state.visible_map)
+				.context("visible map is missing")?,
+			coord: Coord::new_axial(1, 1),
+		};
+		let state = &mut self.state;
+		let engine = &mut self.engine;
+		let ecs = &mut self.ecs;
+		let civ = &mut self.civ;
+		ecs.run(
+			|mut all_storages: AllStoragesViewMut| -> anyhow::Result<()> {
+				let entity =
+					civ.create_entity_from_template(state, "test_unit", &mut all_storages)?;
+				// let entities = all_storages.try_borrow::<EntitiesView>()?;
+				// let coords = all_storages.try_borrow::<ViewMut<MapCoord>>
+				engine.move_entity_to_coord(
+					entity,
+					coord,
+					all_storages.try_borrow()?,
+					all_storages.try_borrow()?,
+				)?;
+				Ok(())
+			},
+		)?;
+
 		Ok(())
 	}
 
@@ -187,12 +229,13 @@ impl Game {
 
 	pub fn run_once(&mut self) -> anyhow::Result<()> {
 		let state = &mut self.state;
+		let ecs = &mut self.ecs;
 		let events_loop = &mut self.events_loop;
 		let engine = &mut self.engine;
 		state.ctx.timer_context.tick();
 		events_loop.poll_events(|event| {
 			state.ctx.process_event(&event);
-			state.dispatch_event(engine, event).unwrap();
+			state.dispatch_event(ecs, engine, event).unwrap();
 		});
 		// Handle gamepad events if necessary.
 		// Yeah okay, ggez has this entirely borked behind private...
@@ -214,8 +257,8 @@ impl Game {
 		// 		}
 		// 	}
 		// }
-		self.state.update(&mut self.engine)?;
-		self.state.draw(&mut self.engine)?;
+		self.state.update(&mut self.ecs, &mut self.engine)?;
+		self.state.draw(&mut self.ecs, &mut self.engine)?;
 
 		Ok(())
 	}
@@ -224,6 +267,11 @@ impl Game {
 impl GameState {
 	fn new(mut ctx: Context) -> GameState {
 		let tiles_atlas = MultiAtlasBuilder::new(1, 1)
+			.generate(&mut |_width, _height, _data| {
+				Ok(graphics::Image::solid(&mut ctx, 1, graphics::WHITE)?)
+			})
+			.unwrap();
+		let entity_atlas = MultiAtlasBuilder::new(1, 1)
 			.generate(&mut |_width, _height, _data| {
 				Ok(graphics::Image::solid(&mut ctx, 1, graphics::WHITE)?)
 			})
@@ -244,6 +292,8 @@ impl GameState {
 			tiles_drawable: vec![],
 			selected: None,
 			selected_mesh: None,
+			entity_spritebatches: vec![],
+			entity_atlas,
 		}
 	}
 
@@ -291,35 +341,66 @@ impl GameState {
 		}
 		self.tiles_atlas = tile_atlas_builder.generate(&mut |width, height, rgba| {
 			let mut image = graphics::Image::from_rgba8(&mut self.ctx, width, height, rgba)
-				.context("failed converting atlas texture")?;
+				.context("failed converting tiles atlas texture")?;
 			image.set_filter(FilterMode::Nearest);
 			Ok(image)
 		})?;
 		// let image = self.tiles_atlas.get_image_by_index(0).unwrap();
 		// image.encode(&mut self.ctx, graphics::ImageFormat::Png, "/tilemap0.png")?;
+
+		// TODO: Make this more fancy like the tiles atlas to load user defined entity files and all
+		let mut entity_atlas_builder = MultiAtlasBuilder::new(2048, 2048);
+		let path = PathBuf::from("/sprites/_load.ron");
+		let reader = ggez::filesystem::open(&mut self.ctx, path)?;
+		let entity_sprites: Vec<String> = ron::de::from_reader(reader)?;
+		for sprite_name in entity_sprites {
+			let ctx = &mut self.ctx;
+			let id = entity_atlas_builder.get_or_create_with(&sprite_name, || {
+				use std::io::Read;
+				let mut path = PathBuf::from("/sprites");
+				path.push(format!("{}.png", sprite_name));
+
+				let mut buf = Vec::new();
+				let mut reader = ggez::filesystem::open(ctx, path)?;
+				let _ = reader.read_to_end(&mut buf)?;
+				let image = image::load_from_memory(&buf)?.to_rgba();
+				let width = image.width() as u16;
+				let height = image.height() as u16;
+				let rgba = image.into_raw();
+
+				Ok((width, height, rgba))
+			})?;
+		}
+		self.entity_atlas = entity_atlas_builder.generate(&mut |width, height, rgba| {
+			let mut image = graphics::Image::from_rgba8(&mut self.ctx, width, height, rgba)
+				.context("failed converting entities atlas texture")?;
+			image.set_filter(FilterMode::Nearest);
+			Ok(image)
+		})?;
 		Ok(())
 	}
 
 	fn dispatch_event(
 		&mut self,
+		ecs: &mut shipyard::World,
 		engine: &mut Engine<GameState>,
 		event: Event,
 	) -> anyhow::Result<()> {
 		match event {
 			Event::WindowEvent { event, .. } => match event {
 				WindowEvent::Resized(logical_size) => {
-					self.resize_event(engine, logical_size)?;
+					self.resize_event(ecs, engine, logical_size)?;
 				}
 				WindowEvent::CloseRequested => {
-					if self.quit_event(engine)? {
+					if self.quit_event(ecs, engine)? {
 						ggez::event::quit(&mut self.ctx);
 					}
 				}
 				WindowEvent::Focused(gained) => {
-					self.focus_event(engine, gained)?;
+					self.focus_event(ecs, engine, gained)?;
 				}
 				WindowEvent::ReceivedCharacter(ch) => {
-					self.text_input_event(engine, ch)?;
+					self.text_input_event(ecs, engine, ch)?;
 				}
 				WindowEvent::KeyboardInput {
 					input:
@@ -332,7 +413,7 @@ impl GameState {
 					..
 				} => {
 					let repeat = keyboard::is_key_repeated(&self.ctx);
-					self.key_down_event(engine, keycode, modifiers, repeat)?;
+					self.key_down_event(ecs, engine, keycode, modifiers, repeat)?;
 				}
 				WindowEvent::KeyboardInput {
 					input:
@@ -344,7 +425,7 @@ impl GameState {
 						},
 					..
 				} => {
-					self.key_up_event(engine, keycode, modifiers)?;
+					self.key_up_event(ecs, engine, keycode, modifiers)?;
 				}
 				WindowEvent::MouseWheel { delta, .. } => {
 					let (x, y) = match delta {
@@ -353,7 +434,7 @@ impl GameState {
 							(x as f32, y as f32)
 						}
 					};
-					self.mouse_wheel_event(engine, x, y)?;
+					self.mouse_wheel_event(ecs, engine, x, y)?;
 				}
 				WindowEvent::MouseInput {
 					state: element_state,
@@ -363,17 +444,21 @@ impl GameState {
 					let position = mouse::position(&self.ctx);
 					match element_state {
 						ElementState::Pressed => {
-							self.mouse_button_down_event(engine, button, position.x, position.y)?;
+							self.mouse_button_down_event(
+								ecs, engine, button, position.x, position.y,
+							)?;
 						}
 						ElementState::Released => {
-							self.mouse_button_up_event(engine, button, position.x, position.y)?;
+							self.mouse_button_up_event(
+								ecs, engine, button, position.x, position.y,
+							)?;
 						}
 					}
 				}
 				WindowEvent::CursorMoved { .. } => {
 					let position = mouse::position(&self.ctx);
 					let delta = mouse::delta(&self.ctx);
-					self.mouse_motion_event(engine, position.x, position.y, delta.x, delta.y)?;
+					self.mouse_motion_event(ecs, engine, position.x, position.y, delta.x, delta.y)?;
 				}
 				_x => {
 					// trace!("ignoring window event {:?}", x);
@@ -394,6 +479,7 @@ impl GameState {
 	// Callbacks
 	fn resize_event(
 		&mut self,
+		_ecs: &mut shipyard::World,
 		_engine: &mut Engine<GameState>,
 		logical_size: dpi::LogicalSize,
 	) -> anyhow::Result<()> {
@@ -403,12 +489,17 @@ impl GameState {
 		Ok(())
 	}
 
-	fn quit_event(&mut self, _engine: &mut Engine<GameState>) -> anyhow::Result<bool> {
+	fn quit_event(
+		&mut self,
+		_ecs: &mut shipyard::World,
+		_engine: &mut Engine<GameState>,
+	) -> anyhow::Result<bool> {
 		Ok(true)
 	}
 
 	fn focus_event(
 		&mut self,
+		_ecs: &mut shipyard::World,
 		_engine: &mut Engine<GameState>,
 		_gained: bool,
 	) -> anyhow::Result<()> {
@@ -417,6 +508,7 @@ impl GameState {
 
 	fn text_input_event(
 		&mut self,
+		_ecs: &mut shipyard::World,
 		_engine: &mut Engine<GameState>,
 		_ch: char,
 	) -> anyhow::Result<()> {
@@ -425,6 +517,7 @@ impl GameState {
 
 	fn key_down_event(
 		&mut self,
+		_ecs: &mut shipyard::World,
 		_engine: &mut Engine<GameState>,
 		_keycode: VirtualKeyCode,
 		_modifiers: ModifiersState,
@@ -435,6 +528,7 @@ impl GameState {
 
 	fn key_up_event(
 		&mut self,
+		_ecs: &mut shipyard::World,
 		_engine: &mut Engine<GameState>,
 		keycode: VirtualKeyCode,
 		modifiers: ModifiersState,
@@ -453,6 +547,7 @@ impl GameState {
 
 	fn mouse_wheel_event(
 		&mut self,
+		_ecs: &mut shipyard::World,
 		_engine: &mut Engine<GameState>,
 		_x: f32,
 		y: f32,
@@ -469,6 +564,7 @@ impl GameState {
 
 	fn mouse_button_down_event(
 		&mut self,
+		ecs: &mut shipyard::World,
 		engine: &mut Engine<GameState>,
 		_button: MouseButton,
 		x: f32,
@@ -478,25 +574,33 @@ impl GameState {
 		let screen_y = y / self.screen_size.height as f32;
 		let (map_x, map_y) = self.screen_ratio_to_map(screen_x, screen_y);
 		let coord = Coord::from_linear(map_x, map_y);
-		self.set_selected_coord(engine, coord)?;
+		let map_coord = MapCoord {
+			map: engine
+				.maps
+				.get_index_of(&self.visible_map)
+				.context("visible map doesn't exist")?,
+			coord,
+		};
+		self.set_selected_coord(ecs, engine, map_coord)?;
 		Ok(())
 	}
 
 	fn set_selected_coord(
 		&mut self,
+		ecs: &mut shipyard::World,
 		engine: &mut Engine<GameState>,
-		coord: Coord,
+		coord: MapCoord,
 	) -> anyhow::Result<()> {
-		self.remove_selected(engine)?;
+		self.remove_selected(ecs, engine)?;
 		let tile_map = engine
 			.maps
-			.get_mut(&self.visible_map)
-			.context("unable to lookup the visible map")?;
-		match tile_map.get_tile_mut(coord) {
+			.get_index_mut(coord.map)
+			.context("unable to lookup the visible map")?
+			.1;
+		match tile_map.get_tile_mut(coord.coord) {
 			None => (),
 			Some(tile) => {
-				let entity = engine
-					.ecs
+				let entity = ecs
 					.try_entity_builder()?
 					.try_with(components::IsSelected())?
 					.try_with(coord)?
@@ -510,31 +614,40 @@ impl GameState {
 		Ok(())
 	}
 
-	fn _set_selected_entity(&mut self, engine: &mut Engine<GameState>, entity: EntityId) {
-		engine.ecs.run(
+	fn _set_selected_entity(
+		&mut self,
+		ecs: &mut shipyard::World,
+		_engine: &mut Engine<GameState>,
+		entity: EntityId,
+	) {
+		ecs.run(
 			|entities: EntitiesView, mut selected: ViewMut<components::IsSelected>| {
 				entities.add_component(&mut selected, components::IsSelected(), entity);
 			},
 		)
 	}
 
-	fn remove_selected(&mut self, engine: &mut Engine<GameState>) -> anyhow::Result<()> {
+	fn remove_selected(
+		&mut self,
+		ecs: &mut shipyard::World,
+		engine: &mut Engine<GameState>,
+	) -> anyhow::Result<()> {
 		match self.selected {
 			None => (),
 			Some(entity) => {
 				self.selected = None;
-				let ecs = &mut engine.ecs;
 				let maps = &mut engine.maps;
 				ecs.run(
 					|mut all_storages: AllStoragesViewMut| -> anyhow::Result<()> {
 						{
-							let coords = all_storages.try_borrow::<View<Coord>>()?;
+							let coords = all_storages.try_borrow::<View<MapCoord>>()?;
 							let coord = coords[entity];
 							let tile_map = maps
-								.get_mut(&self.visible_map)
-								.context("unable to lookup the visible map")?;
+								.get_index_mut(coord.map)
+								.context("unable to lookup the visible map")?
+								.1;
 							let tile = tile_map
-								.get_tile_mut(coord)
+								.get_tile_mut(coord.coord)
 								.context("tile cannot be found that should exist")?;
 							tile.entities.remove(&entity);
 						}
@@ -560,6 +673,7 @@ impl GameState {
 
 	fn mouse_button_up_event(
 		&mut self,
+		_ecs: &mut shipyard::World,
 		_engine: &mut Engine<GameState>,
 		_button: MouseButton,
 		_x: f32,
@@ -570,6 +684,7 @@ impl GameState {
 
 	fn mouse_motion_event(
 		&mut self,
+		_ecs: &mut shipyard::World,
 		_engine: &mut Engine<GameState>,
 		_abs_x: f32,
 		_abs_y: f32,
@@ -579,11 +694,19 @@ impl GameState {
 		Ok(())
 	}
 
-	fn update(&mut self, _engine: &mut Engine<GameState>) -> anyhow::Result<()> {
+	fn update(
+		&mut self,
+		_ecs: &mut shipyard::World,
+		_engine: &mut Engine<GameState>,
+	) -> anyhow::Result<()> {
 		Ok(())
 	}
 
-	fn draw(&mut self, engine: &mut Engine<GameState>) -> anyhow::Result<()> {
+	fn draw(
+		&mut self,
+		ecs: &mut shipyard::World,
+		engine: &mut Engine<GameState>,
+	) -> anyhow::Result<()> {
 		let delta = ggez::timer::delta(&self.ctx);
 		self.zoom -= (self.zoom - self.screen_tiles) * (delta.as_secs_f32() * 5.0);
 		graphics::clear(&mut self.ctx, graphics::BLACK);
@@ -594,13 +717,88 @@ impl GameState {
 			self.zoom,
 		);
 		graphics::set_screen_coordinates(&mut self.ctx, screen_coords)?;
-		self.draw_map(engine)?;
-		self.draw_selection(engine)?;
+		self.draw_map(ecs, engine)?;
+		self.draw_entities(ecs, engine)?;
+		self.draw_selection(ecs, engine)?;
 		graphics::present(&mut self.ctx)?;
 		Ok(())
 	}
 
-	fn draw_map(&mut self, engine: &mut Engine<GameState>) -> anyhow::Result<()> {
+	fn draw_entities(
+		&mut self,
+		ecs: &mut shipyard::World,
+		engine: &mut Engine<GameState>,
+	) -> anyhow::Result<()> {
+		if self.entity_atlas.len_atlases() != self.entity_spritebatches.len() {
+			self.entity_spritebatches.clear();
+			self.entity_spritebatches
+				.reserve(self.entity_atlas.len_atlases());
+			for i in 0..self.entity_atlas.len_atlases() {
+				self.entity_spritebatches.push(SpriteBatch::new(
+					self.entity_atlas
+						.get_image_by_index(i)
+						.context("Atlas is missing an image")?
+						.clone(),
+				));
+			}
+		}
+
+		let tile_map = engine
+			.maps
+			.get(&self.visible_map)
+			.with_context(|| format!("Unable to load visible map: {}", self.visible_map))?;
+		let radius = self.screen_tiles * self.aspect_ratio + 1.0;
+		let radius = if radius.abs() > 16.0 {
+			16i8
+		} else {
+			radius.abs() as i8
+		};
+		let draw_sprites = ecs.try_borrow::<View<DrawSprite>>()?;
+		for c in Coord::from_linear(self.view_center.x, self.view_center.y).iter_neighbors(radius) {
+			if let Some(tile) = tile_map.get_tile(c) {
+				for &entity in &tile.entities {
+					if draw_sprites.contains(entity) {
+						let draw = &draw_sprites[entity];
+						if let Some(sprite) = self.entity_atlas.get_entry_by_name(&draw.sprite_name)
+						{
+							let (px, py) = c.to_linear();
+							let idx = sprite.get_atlas_idx();
+							let batch = &mut self.entity_spritebatches[idx];
+							let src = Rect::new(
+								sprite.left(),
+								sprite.top(),
+								sprite.width(),
+								sprite.height(),
+							);
+							//let dest = [px - draw.rect.w * 0.5, py - draw.rect.h * 0.5];
+							let dest = [px + draw.rect.x, py + draw.rect.y];
+							let offset = [0.5, 0.5];
+							let scale = [1.0 / 32.0, 1.0 / 32.0]; // Uh, why are sprites so *huge*?!
+							let params = DrawParam::new()
+								.src(src)
+								.dest(dest)
+								.offset(offset)
+								.scale(scale);
+							batch.add(params);
+						}
+					}
+				}
+			}
+		}
+		let params = DrawParam::new();
+		for batch in &mut self.entity_spritebatches {
+			batch.draw(&mut self.ctx, params)?;
+			batch.clear();
+		}
+
+		Ok(())
+	}
+
+	fn draw_map(
+		&mut self,
+		_ecs: &mut shipyard::World,
+		engine: &mut Engine<GameState>,
+	) -> anyhow::Result<()> {
 		if self.tiles_meshes.is_empty() {
 			let mut mesh_builders: Vec<_> = (0..self.tiles_atlas.len_atlases())
 				.map(|_| (false, graphics::MeshBuilder::new()))
@@ -687,7 +885,11 @@ impl GameState {
 		Ok(())
 	}
 
-	fn draw_selection(&mut self, engine: &mut Engine<GameState>) -> anyhow::Result<()> {
+	fn draw_selection(
+		&mut self,
+		ecs: &mut shipyard::World,
+		_engine: &mut Engine<GameState>,
+	) -> anyhow::Result<()> {
 		if None == self.selected_mesh {
 			self.selected_mesh = Some(graphics::Mesh::new_circle(
 				&mut self.ctx,
@@ -701,7 +903,7 @@ impl GameState {
 		let selected_mesh = &self.selected_mesh;
 		let ctx = &mut self.ctx;
 		if let Some(mesh) = selected_mesh {
-			engine.ecs.run(
+			ecs.run(
 				|coords: View<Coord>,
 				 selected: View<components::IsSelected>|
 				 -> anyhow::Result<()> {

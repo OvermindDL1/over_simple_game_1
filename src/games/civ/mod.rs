@@ -1,7 +1,14 @@
-pub mod maps;
-
-use crate::core::engine::io::EngineIO;
 use std::path::{Path, PathBuf};
+
+use anyhow::Context as AnyContext;
+use shipyard::*;
+
+use crate::core::component::ComponentAutoLoadable;
+use crate::core::engine::io::EngineIO;
+use crate::core::engine::Engine;
+use crate::core::map::coord::MapCoord;
+
+pub mod maps;
 
 pub struct CivGame {
 	base_resource_path: PathBuf,
@@ -14,5 +21,28 @@ impl CivGame {
 		}
 	}
 
-	pub fn setup<IO: EngineIO>(&mut self) {}
+	// pub fn setup<IO: EngineIO>(&mut self) {}
+
+	// This entity is not yet attached to the world
+	pub fn create_entity_from_template<IO: 'static + EngineIO>(
+		&mut self,
+		io: &mut IO,
+		template: &str,
+		all_storages: &mut AllStoragesViewMut,
+	) -> anyhow::Result<EntityId> {
+		// TODO: Build a cache for this
+		let mut path = self.base_resource_path.clone();
+		path.push("entities");
+		path.push(format!("{}.ron", template));
+		let reader = io.read(path)?;
+		let components: Vec<Box<dyn ComponentAutoLoadable>> = ron::de::from_reader(reader)
+			.with_context(|| format!("Failed loading component template for: {}", template))?;
+		let entity = all_storages
+			.try_borrow::<EntitiesViewMut>()?
+			.add_entity((), ());
+		for c in components {
+			c.add_to_entity(entity, all_storages)?;
+		}
+		Ok(entity)
+	}
 }

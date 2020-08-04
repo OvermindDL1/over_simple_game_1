@@ -10,7 +10,9 @@ use crate::core::map::tile_map::{TileMap, TileMapError};
 use std::fmt::Debug;
 
 use crate::core::engine::io::EngineIO;
-use indexmap::map::IndexMap;
+use crate::core::map::coord::MapCoord;
+use crate::core::structures::typed_index_map::{TypedIndexMap, TypedIndexMapIndex};
+use shipyard::{EntitiesView, EntityId, ViewMut};
 
 #[derive(Error, Debug)]
 pub enum EngineError<IO: EngineIO + 'static> {
@@ -27,18 +29,26 @@ pub enum EngineError<IO: EngineIO + 'static> {
 	#[error("requested map does not exist: {0}")]
 	MapDoesNotExists(String),
 
+	#[error("requested map does not exist at ID: {0:?}")]
+	MapDoesNotExistsIdx(TypedIndexMapIndex<IndexMaps>),
+
 	#[error("failed to generate tile map")]
 	TileMapGenerationFailed {
 		#[from]
 		source: TileMapError,
 		//backtrace: Backtrace, // Still needs nightly...
 	},
+
+	#[error("invalid coordinate requested on map `{map_name}` for: {coord:?}")]
+	CoordIsOutOfRange { map_name: String, coord: MapCoord },
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
+pub enum IndexMaps {}
+
 pub struct Engine<IO: EngineIO> {
-	pub ecs: shipyard::World,
 	pub tile_types: TileTypes<IO>,
-	pub maps: IndexMap<String, TileMap>,
+	pub maps: TypedIndexMap<IndexMaps, String, TileMap>,
 }
 
 impl<IO: EngineIO> Engine<IO> {
@@ -49,9 +59,8 @@ impl<IO: EngineIO> Engine<IO> {
 	/// ```
 	pub fn new() -> Engine<IO> {
 		Engine {
-			ecs: shipyard::World::new(),
 			tile_types: TileTypes::new(),
-			maps: IndexMap::new(),
+			maps: TypedIndexMap::new(),
 		}
 	}
 
@@ -77,6 +86,88 @@ impl<IO: EngineIO> Engine<IO> {
 
 		let tile_map = TileMap::new(max_x, max_y, wraps_x, generator)?;
 		self.maps.insert(name, tile_map);
+
+		Ok(())
+	}
+
+	pub fn move_entity_to_coord(
+		&mut self,
+		entity: EntityId,
+		c: MapCoord,
+		entities: EntitiesView,
+		mut storage: ViewMut<MapCoord>,
+	) -> Result<(), EngineError<IO>> {
+		if !storage.contains(entity) {
+			entities.add_component(&mut storage, c, entity);
+			let (map_name, map) = self
+				.maps
+				.get_index_mut(c.map)
+				.ok_or_else(|| EngineError::MapDoesNotExistsIdx(c.map))?;
+			let tile = map
+				.get_tile_mut(c.coord)
+				.ok_or_else(|| EngineError::CoordIsOutOfRange {
+					map_name: (*map_name).clone(),
+					coord: c,
+				})?;
+			tile.entities.insert(entity);
+		} else {
+			let coord = &mut storage[entity];
+			if coord.map == c.map && coord.coord != c.coord {
+				let (map_name, map) = self
+					.maps
+					.get_index_mut(c.map)
+					.ok_or_else(|| EngineError::MapDoesNotExistsIdx(c.map))?;
+				// Old tile
+				map.get_tile_mut(coord.coord)
+					.ok_or_else(|| EngineError::CoordIsOutOfRange {
+						map_name: (*map_name).clone(),
+						coord: c,
+					})?
+					.entities
+					.remove(&entity);
+				// New tile
+				map.get_tile_mut(c.coord)
+					.ok_or_else(|| EngineError::CoordIsOutOfRange {
+						map_name: (*map_name).clone(),
+						coord: c,
+					})?
+					.entities
+					.insert(entity);
+				coord.coord = c.coord;
+			} else if coord.coord != c.coord {
+				{
+					// Old tile
+					let (old_map_name, old_map) = self
+						.maps
+						.get_index_mut(coord.map)
+						.ok_or_else(|| EngineError::MapDoesNotExistsIdx(c.map))?;
+					old_map
+						.get_tile_mut(c.coord)
+						.ok_or_else(|| EngineError::CoordIsOutOfRange {
+							map_name: (*old_map_name).clone(),
+							coord: c,
+						})?
+						.entities
+						.remove(&entity);
+				}
+				{
+					// New tile
+					let (new_map_name, new_map) = self
+						.maps
+						.get_index_mut(coord.map)
+						.ok_or_else(|| EngineError::MapDoesNotExistsIdx(c.map))?;
+					new_map
+						.get_tile_mut(c.coord)
+						.ok_or_else(|| EngineError::CoordIsOutOfRange {
+							map_name: (*new_map_name).clone(),
+							coord: c,
+						})?
+						.entities
+						.insert(entity);
+				}
+				*coord = c;
+			}
+		}
 
 		Ok(())
 	}
