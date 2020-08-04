@@ -199,9 +199,8 @@ mod tile_tests {
 		}
 	}
 
-	fn rand_dummy_tiletype_strategy() -> BoxedStrategy<TileType<DummyIO>> {
-		// any::<String>()
-        prop::string::string_regex(".*")
+	fn tiletype_strategy_generator(regex: &str) -> BoxedStrategy<TileType<DummyIO>> {
+        prop::string::string_regex(regex)
             .expect("failed to generate strategy from regex")
 			.prop_map(|s| TileType {
 				name: s,
@@ -210,10 +209,12 @@ mod tile_tests {
 			.boxed()
 	}
 
+	fn rand_dummy_tiletype_strategy() -> BoxedStrategy<TileType<DummyIO>> {
+        tiletype_strategy_generator(".*")
+    }
+
 	fn non_empty_tiletype_strategy() -> BoxedStrategy<TileType<DummyIO>> {
-		rand_dummy_tiletype_strategy()
-			.prop_filter("empty tiletype", |t| t.name != "")
-			.boxed()
+        tiletype_strategy_generator(".+")
 	}
 
 	proptest!(
