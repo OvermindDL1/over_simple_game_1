@@ -171,9 +171,9 @@ impl<IO: EngineIO> TileTypes<IO> {
 mod tile_tests {
 	use super::*;
 	use proptest::prelude::*;
-	use std::{convert::Infallible, path::PathBuf};
+	use std::{convert::Infallible, hash::Hasher, path::PathBuf};
 
-	#[derive(Debug, Default)]
+	#[derive(Debug, Default, Eq, PartialEq)]
 	struct DummyIO {}
 
 	impl EngineIO for DummyIO {
@@ -199,9 +199,22 @@ mod tile_tests {
 		}
 	}
 
+	impl PartialEq for TileType<DummyIO> {
+		fn eq(&self, other: &Self) -> bool {
+			self.name == other.name
+		}
+	}
+	impl Eq for TileType<DummyIO> {}
+
+	impl std::hash::Hash for TileType<DummyIO> {
+		fn hash<H: Hasher>(&self, state: &mut H) {
+			self.name.hash(state);
+		}
+	}
+
 	fn tiletype_strategy_generator(regex: &str) -> BoxedStrategy<TileType<DummyIO>> {
-        prop::string::string_regex(regex)
-            .expect("failed to generate strategy from regex")
+		prop::string::string_regex(regex)
+			.expect("failed to generate strategy from regex")
 			.prop_map(|s| TileType {
 				name: s,
 				interface: (),
@@ -210,11 +223,11 @@ mod tile_tests {
 	}
 
 	fn rand_dummy_tiletype_strategy() -> BoxedStrategy<TileType<DummyIO>> {
-        tiletype_strategy_generator(".*")
-    }
+		tiletype_strategy_generator(".*")
+	}
 
 	fn non_empty_tiletype_strategy() -> BoxedStrategy<TileType<DummyIO>> {
-        tiletype_strategy_generator(".+")
+		tiletype_strategy_generator(".+")
 	}
 
 	proptest!(
@@ -236,6 +249,23 @@ mod tile_tests {
 			let name = tt.name.clone();     // I really don't want to do this, but add_tile consumes
 			if let Err(TileTypesError::InvalidTileTypeData(s)) = tts.add_tile(&mut dummy_io, tt) {
 				prop_assert!(false, "TileType {} marked invalid because {}", name, s);
+			}
+		}
+	);
+
+	proptest!(
+		#[test]
+		fn many_valid_tiletypes_get_accepted(
+			// I would use 2..TileIdx::MAX for the size but it pins the cpu
+			tt_set in prop::collection::hash_set(non_empty_tiletype_strategy(), 2..500)
+		) {
+			let mut dummy_io = DummyIO::default();
+			let mut tts = TileTypes::new();
+			for tt in tt_set {
+				// I would use prop_assert_ne!(add_tile, Ok(())) but it needs PartialEq
+				if let Err(e) = tts.add_tile(&mut dummy_io, tt) {
+					prop_assert!(false, "{}", e);
+				}
 			}
 		}
 	);
