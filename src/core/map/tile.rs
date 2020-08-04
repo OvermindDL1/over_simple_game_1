@@ -236,4 +236,23 @@ mod tile_tests {
 			}
 		}
 	);
+
+	#[test]
+	fn empty_tiletypes_are_rejected() {
+		let tt = TileType::<DummyIO> {
+			name: String::from(""),
+			interface: (),
+		};
+		let mut dummy_io = DummyIO::default();
+		let mut tts = TileTypes::new();
+
+		if let Err(TileTypesError::InvalidTileTypeData(s)) = tts.add_tile(&mut dummy_io, tt) {
+			if s == "name is empty" {
+			} else {
+				panic!("empty string marked with incorrect error: {}", s);
+			}
+		} else {
+			panic!("empty string not marked as error");
+		}
+	}
 }
