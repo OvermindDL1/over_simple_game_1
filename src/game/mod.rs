@@ -763,6 +763,8 @@ impl GameState {
 						{
 							let (px, py) = c.to_linear();
 							let idx = sprite.get_atlas_idx();
+							let image_dim =
+								self.entity_atlas.get_image(sprite.get_id()).dimensions();
 							let batch = &mut self.entity_spritebatches[idx];
 							let src = Rect::new(
 								sprite.left(),
@@ -770,10 +772,15 @@ impl GameState {
 								sprite.width(),
 								sprite.height(),
 							);
-							//let dest = [px - draw.rect.w * 0.5, py - draw.rect.h * 0.5];
 							let dest = [px + draw.rect.x, py + draw.rect.y];
 							let offset = [0.5, 0.5];
-							let scale = [1.0 / 32.0, 1.0 / 32.0]; // Uh, why are sprites so *huge*?!
+							// No clue why the size of the sprite is dependent on the size of the source image..
+							// Seems like an excessively bad mis-design...  o.O
+							// So... undo that ggez brokenness...
+							let scale = [
+								1.0 / (image_dim.w * sprite.width()),
+								1.0 / (image_dim.h * sprite.height()),
+							];
 							let params = DrawParam::new()
 								.src(src)
 								.dest(dest)
