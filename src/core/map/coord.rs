@@ -521,7 +521,7 @@ mod coord_tests {
 			}
 			assert_eq!(
 				around.len(),
-				(1..=distance).fold(1, |acc, i| { acc + (i as usize * 6) }),
+				3 * ((distance as usize).pow(2) + distance as usize) + 1,
 				"Distance {} missing/extra values, generated: {:?}",
 				distance,
 				around
