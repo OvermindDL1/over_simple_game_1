@@ -531,9 +531,7 @@ mod coord_tests {
 
 	proptest!(
 		#[test]
-		fn coord_to_linear_from_linear(q: u8, r: u8) {
-			let axial = Coord::new_axial(q, r);
-
+		fn coord_to_linear_from_linear(axial in rand_coord_strategy()) {
 			let (x, y) = axial.to_linear();
 			let axial_to_from = Coord::from_linear(x, y);
 
