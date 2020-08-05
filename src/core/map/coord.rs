@@ -481,8 +481,8 @@ mod coord_tests {
 			assert_eq!(iter.next(), None);
 		}
 		{
-			let coords = CoordOrientationRingIterator::new(1)
-                .collect::<HashSet<CoordOrientation>>();
+			let coords =
+				CoordOrientationRingIterator::new(1).collect::<HashSet<CoordOrientation>>();
 			assert!(coords.contains(&CoordOrientation::new_axial(1, 0)));
 			assert!(coords.contains(&CoordOrientation::new_axial(0, 1)));
 			assert!(coords.contains(&CoordOrientation::new_axial(-1, 1)));
@@ -493,15 +493,12 @@ mod coord_tests {
 		}
 	}
 
-    proptest!(
-        #![proptest_config(ProptestConfig::with_cases(30))]
-        #[test]
-        fn coord_orientation_ring_iterator_big_count(distance in 2..128u8) {
-			let iter = CoordOrientationRingIterator::new(distance);
-			let mut around = HashSet::<CoordOrientation>::new();
-			for c in iter {
-				around.insert(c);
-			}
+	proptest!(
+		#![proptest_config(ProptestConfig::with_cases(30))]
+		#[test]
+		fn coord_orientation_ring_iterator_big_count(distance in 2..128u8) {
+			let around = CoordOrientationRingIterator::new(distance)
+				.collect::<HashSet<CoordOrientation>>();
 			assert_eq!(
 				around.len(),
 				(distance as usize * 6),
@@ -509,8 +506,8 @@ mod coord_tests {
 				distance,
 				around
 			);
-        }
-    );
+		}
+	);
 
 	#[test]
 	fn coord_orientation_neighbor_iterator_small_count() {
@@ -521,15 +518,12 @@ mod coord_tests {
 		}
 	}
 
-    proptest!(
-        #![proptest_config(ProptestConfig::with_cases(30))]
-        #[test]
-        fn coord_orientation_neighbor_iterator_big_count(distance in 1..128u8) {
-			let iter = CoordOrientationNeighborIterator::new(distance);
-			let mut around = HashSet::<CoordOrientation>::new();
-			for c in iter {
-				around.insert(c);
-			}
+	proptest!(
+		#![proptest_config(ProptestConfig::with_cases(30))]
+		#[test]
+		fn coord_orientation_neighbor_iterator_big_count(distance in 1..128u8) {
+			let around = CoordOrientationNeighborIterator::new(distance)
+				.collect::<HashSet<CoordOrientation>>();
 			assert_eq!(
 				around.len(),
 				3 * ((distance as usize).pow(2) + distance as usize) + 1,
@@ -537,8 +531,8 @@ mod coord_tests {
 				distance,
 				around
 			);
-        }
-    );
+		}
+	);
 
 	proptest!(
 		#[test]
