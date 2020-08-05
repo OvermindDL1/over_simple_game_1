@@ -1,6 +1,9 @@
-use crate::core::map::coord::{Coord, MapCoord};
+use crate::core::map::coord::{
+	Coord, CoordOrientation, CoordOrientationNeighborIterator, MapCoord,
+};
 use crate::core::map::generator::MapGenerator;
 use crate::core::map::tile::Tile;
+use serde::export::PhantomData;
 use shipyard::EntityId;
 use thiserror::*;
 
@@ -62,5 +65,48 @@ impl TileMap {
 	pub fn get_tile_mut(&mut self, c: Coord) -> Option<&mut Tile> {
 		let idx = c.idx(self.width, self.height, self.wraps_x)?;
 		Some(&mut self.tiles[idx])
+	}
+
+	pub fn coord_to_in_map_bounds(&self, coord: Coord) -> Coord {
+		let q = coord.q().rem_euclid(self.width + 1);
+		let r = coord.r().rem_euclid(self.height + 1);
+		Coord::new_axial(q, r)
+	}
+
+	pub fn iter_neighbors_around(
+		&self,
+		center: Coord,
+		distance: u8,
+	) -> TileMapNeighborsAroundIterator {
+		TileMapNeighborsAroundIterator {
+			map: self,
+			center,
+			iter: CoordOrientationNeighborIterator::new(distance),
+		}
+	}
+}
+
+pub struct TileMapNeighborsAroundIterator<'a> {
+	map: &'a TileMap,
+	center: Coord,
+	iter: CoordOrientationNeighborIterator,
+}
+
+impl<'a> Iterator for TileMapNeighborsAroundIterator<'a> {
+	type Item = (CoordOrientation, &'a Tile);
+
+	fn next(&mut self) -> Option<Self::Item> {
+		let mut co = self.iter.next()?;
+		loop {
+			if let Some(c) =
+				self.center
+					.offset_by(co, self.map.width, self.map.height, self.map.wraps_x)
+			{
+				if let Some(tile) = self.map.get_tile(c) {
+					return Some((co, tile));
+				}
+			}
+			co = self.iter.next()?;
+		}
 	}
 }

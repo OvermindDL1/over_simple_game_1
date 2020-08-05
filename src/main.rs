@@ -2,6 +2,8 @@ mod game;
 
 use anyhow::Context as AnyContext;
 use log::*;
+use over_simple_game_1::core::map::coord::*;
+use std::collections::HashSet;
 use std::path::Path;
 
 fn main() -> anyhow::Result<()> {

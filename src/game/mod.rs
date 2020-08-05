@@ -21,10 +21,12 @@ use winit::{
 use crate::game::atlas::{AtlasId, MultiAtlas, MultiAtlasBuilder};
 use crate::game::components::DrawSprite;
 use ggez::graphics::spritebatch::SpriteBatch;
-use over_simple_game_1::core::map::coord::MapCoord;
+use over_simple_game_1::core::map::coord::{CoordOrientationNeighborIterator, MapCoord};
 use over_simple_game_1::core::map::generator::SimpleAlternationMapGenerator;
 use over_simple_game_1::games::civ::CivGame;
 use over_simple_game_1::prelude::*;
+use std::collections::HashMap;
+use std::time::Instant;
 
 mod components;
 
@@ -60,6 +62,20 @@ struct TilesDrawable {
 	info: TileDrawableInfo,
 }
 
+struct MouseButtonPressedData {
+	screen: na::Point2<f32>,
+	time: Instant,
+}
+
+impl MouseButtonPressedData {
+	fn new(x: f32, y: f32) -> MouseButtonPressedData {
+		MouseButtonPressedData {
+			screen: [x, y].into(),
+			time: Instant::now(),
+		}
+	}
+}
+
 struct GameState {
 	ctx: Context,
 	visible_map: String,
@@ -75,6 +91,9 @@ struct GameState {
 	entity_spritebatches: Vec<SpriteBatch>,
 	selected: Option<EntityId>,
 	selected_mesh: Option<graphics::Mesh>,
+	click_leeway: f32,
+	mouse_buttons_clicked: HashMap<MouseButton, MouseButtonPressedData>,
+	mouse_last_position: na::Point2<f32>,
 }
 
 pub struct Game {
@@ -186,7 +205,7 @@ impl Game {
 		// let mut generator = civ::maps::NoiseMap::new(&self.engine.tile_types);
 		let name = self.state.visible_map.clone();
 		self.engine
-			.generate_map(&mut self.state, name, 7, 7, false, &mut generator)?;
+			.generate_map(&mut self.state, name, 6, 6, true, &mut generator)?;
 
 		let coord = MapCoord {
 			map: self
@@ -281,7 +300,7 @@ impl GameState {
 			visible_map: "world0".to_owned(),
 			screen_tiles: 2.0,
 			zoom: 2.0,
-			view_center: na::Point2::from([4.0, 4.0]),
+			view_center: na::Point2::from([0.0, 0.0]),
 			screen_size: dpi::LogicalSize {
 				width: 1.0,
 				height: 1.0,
@@ -290,10 +309,13 @@ impl GameState {
 			tiles_atlas,
 			tiles_meshes: vec![],
 			tiles_drawable: vec![],
-			selected: None,
-			selected_mesh: None,
 			entity_spritebatches: vec![],
 			entity_atlas,
+			selected: None,
+			selected_mesh: None,
+			click_leeway: 4.0,
+			mouse_buttons_clicked: HashMap::new(),
+			mouse_last_position: [0.0, 0.0].into(),
 		}
 	}
 
@@ -564,24 +586,17 @@ impl GameState {
 
 	fn mouse_button_down_event(
 		&mut self,
-		ecs: &mut shipyard::World,
-		engine: &mut Engine<GameState>,
-		_button: MouseButton,
+		_ecs: &mut shipyard::World,
+		_engine: &mut Engine<GameState>,
+		button: MouseButton,
 		x: f32,
 		y: f32,
 	) -> anyhow::Result<()> {
 		let screen_x = x / self.screen_size.width as f32;
 		let screen_y = y / self.screen_size.height as f32;
-		let (map_x, map_y) = self.screen_ratio_to_map(screen_x, screen_y);
-		let coord = Coord::from_linear(map_x, map_y);
-		let map_coord = MapCoord {
-			map: engine
-				.maps
-				.get_index_of(&self.visible_map)
-				.context("visible map doesn't exist")?,
-			coord,
-		};
-		self.set_selected_coord(ecs, engine, map_coord)?;
+		self.mouse_buttons_clicked
+			.insert(button, MouseButtonPressedData::new(screen_x, screen_y));
+		self.mouse_last_position = [screen_x, screen_y].into();
 		Ok(())
 	}
 
@@ -607,7 +622,6 @@ impl GameState {
 					.try_build()?;
 				tile.entities.insert(entity);
 				self.selected = Some(entity);
-				//self.set_selected_entity(engine, entity);
 			}
 		}
 
@@ -673,24 +687,67 @@ impl GameState {
 
 	fn mouse_button_up_event(
 		&mut self,
-		_ecs: &mut shipyard::World,
-		_engine: &mut Engine<GameState>,
-		_button: MouseButton,
-		_x: f32,
-		_y: f32,
+		ecs: &mut shipyard::World,
+		engine: &mut Engine<GameState>,
+		button: MouseButton,
+		x: f32,
+		y: f32,
 	) -> anyhow::Result<()> {
+		let screen_x = x / self.screen_size.width as f32;
+		let screen_y = y / self.screen_size.height as f32;
+		if let Some(button_pressed_data) = self.mouse_buttons_clicked.get(&button) {
+			// Test if a proper click
+			if self.is_proper_click(button_pressed_data, screen_x, screen_y) {
+				let (map_x, map_y) = self.screen_ratio_to_map(screen_x, screen_y);
+				let coord = Coord::from_linear(map_x, map_y);
+				let map_coord = MapCoord {
+					map: engine
+						.maps
+						.get_index_of(&self.visible_map)
+						.context("visible map doesn't exist")?,
+					coord,
+				};
+				self.set_selected_coord(ecs, engine, map_coord)?;
+			}
+		}
+		self.mouse_buttons_clicked.remove(&button);
+		self.mouse_last_position = [screen_x, screen_y].into();
 		Ok(())
+	}
+
+	fn is_proper_click(
+		&self,
+		button_pressed_data: &MouseButtonPressedData,
+		screen_x: f32,
+		screen_y: f32,
+	) -> bool {
+		(button_pressed_data.screen.x - screen_x).abs()
+			< (1.0 / self.screen_size.width as f32) * self.click_leeway
+			&& (button_pressed_data.screen.y - screen_y).abs()
+				< (1.0 / self.screen_size.height as f32) * self.click_leeway
 	}
 
 	fn mouse_motion_event(
 		&mut self,
 		_ecs: &mut shipyard::World,
 		_engine: &mut Engine<GameState>,
-		_abs_x: f32,
-		_abs_y: f32,
+		abs_x: f32,
+		abs_y: f32,
 		_delta_x: f32,
 		_delta_y: f32,
 	) -> anyhow::Result<()> {
+		let screen_x = abs_x / self.screen_size.width as f32;
+		let screen_y = abs_y / self.screen_size.height as f32;
+		if let Some(_button_pressed_data) = self.mouse_buttons_clicked.get(&MouseButton::Left) {
+			let (old_map_x, old_map_y) = self.screen_ratio_to_map(screen_x, screen_y);
+			let (new_map_x, new_map_y) =
+				self.screen_ratio_to_map(self.mouse_last_position.x, self.mouse_last_position.y);
+			let (delta_map_x, delta_map_y) = (new_map_x - old_map_x, new_map_y - old_map_y);
+			self.view_center.x += delta_map_x;
+			self.view_center.y += delta_map_y;
+			self.tiles_meshes.clear();
+		}
+		self.mouse_last_position = [screen_x, screen_y].into();
 		Ok(())
 	}
 
@@ -702,6 +759,41 @@ impl GameState {
 		Ok(())
 	}
 
+	fn restrict_view_center(&mut self, engine: &Engine<GameState>) -> anyhow::Result<()> {
+		let map = engine
+			.maps
+			.get(&self.visible_map)
+			.context("visible map does not exist")?;
+
+		let (_full_max_x, max_y) = Coord::new_axial(map.width, map.height).to_linear();
+		if self.view_center.y < 0.0 {
+			self.view_center.y = 0.0;
+		} else if self.view_center.y > max_y {
+			self.view_center.y = max_y;
+		}
+
+		let view_coord = Coord::from_linear(self.view_center.x, self.view_center.y);
+		let (min_x, _y) = Coord::new_axial(0, view_coord.r()).to_linear();
+		let (max_x, _y) = Coord::new_axial(map.width, view_coord.r()).to_linear();
+		if self.view_center.x < min_x - 0.5 {
+			if map.wraps_x {
+				trace!("Wrapping map on X min");
+				self.view_center.x += max_x - min_x + 1.0;
+			} else {
+				self.view_center.x = min_x;
+			}
+		} else if self.view_center.x > max_x + 0.5 {
+			if map.wraps_x {
+				trace!("Wrapping map on X max");
+				self.view_center.x -= max_x - min_x + 1.0;
+			} else {
+				self.view_center.x = max_x;
+			}
+		}
+
+		Ok(())
+	}
+
 	fn draw(
 		&mut self,
 		ecs: &mut shipyard::World,
@@ -709,7 +801,7 @@ impl GameState {
 	) -> anyhow::Result<()> {
 		let delta = ggez::timer::delta(&self.ctx);
 		self.zoom -= (self.zoom - self.screen_tiles) * (delta.as_secs_f32() * 5.0);
-		graphics::clear(&mut self.ctx, graphics::BLACK);
+		self.restrict_view_center(engine)?;
 		let screen_coords = Rect::new(
 			self.view_center.x - self.zoom * 0.5 * self.aspect_ratio,
 			self.view_center.y - self.zoom * 0.5,
@@ -717,6 +809,7 @@ impl GameState {
 			self.zoom,
 		);
 		graphics::set_screen_coordinates(&mut self.ctx, screen_coords)?;
+		graphics::clear(&mut self.ctx, graphics::BLACK);
 		self.draw_map(ecs, engine)?;
 		self.draw_entities(ecs, engine)?;
 		self.draw_selection(ecs, engine)?;
@@ -729,6 +822,7 @@ impl GameState {
 		ecs: &mut shipyard::World,
 		engine: &mut Engine<GameState>,
 	) -> anyhow::Result<()> {
+		// TODO: SpriteBatch doesn't seem terribly efficient, examine if it would be better to either cache and reuse it like the map mesh, or to build a mesh for it instead...
 		if self.entity_atlas.len_atlases() != self.entity_spritebatches.len() {
 			self.entity_spritebatches.clear();
 			self.entity_spritebatches
@@ -749,45 +843,41 @@ impl GameState {
 			.with_context(|| format!("Unable to load visible map: {}", self.visible_map))?;
 		let radius = self.screen_tiles * self.aspect_ratio + 1.0;
 		let radius = if radius.abs() > 16.0 {
-			16i8
+			16u8
 		} else {
-			radius.abs() as i8
+			radius.abs() as u8
 		};
 		let draw_sprites = ecs.try_borrow::<View<DrawSprite>>()?;
-		for c in Coord::from_linear(self.view_center.x, self.view_center.y).iter_neighbors(radius) {
-			if let Some(tile) = tile_map.get_tile(c) {
-				for &entity in &tile.entities {
-					if draw_sprites.contains(entity) {
-						let draw = &draw_sprites[entity];
-						if let Some(sprite) = self.entity_atlas.get_entry_by_name(&draw.sprite_name)
-						{
-							let (px, py) = c.to_linear();
-							let idx = sprite.get_atlas_idx();
-							let image_dim =
-								self.entity_atlas.get_image(sprite.get_id()).dimensions();
-							let batch = &mut self.entity_spritebatches[idx];
-							let src = Rect::new(
-								sprite.left(),
-								sprite.top(),
-								sprite.width(),
-								sprite.height(),
-							);
-							let dest = [px + draw.rect.x, py + draw.rect.y];
-							let offset = [0.5, 0.5];
-							// No clue why the size of the sprite is dependent on the size of the source image..
-							// Seems like an excessively bad mis-design...  o.O
-							// So... undo that ggez brokenness...
-							let scale = [
-								1.0 / (image_dim.w * sprite.width()),
-								1.0 / (image_dim.h * sprite.height()),
-							];
-							let params = DrawParam::new()
-								.src(src)
-								.dest(dest)
-								.offset(offset)
-								.scale(scale);
-							batch.add(params);
-						}
+		let center = Coord::from_linear(self.view_center.x, self.view_center.y);
+		let (center_x, center_y) = center.to_linear();
+		for (co, tile) in tile_map.iter_neighbors_around(center, radius) {
+			for &entity in &tile.entities {
+				if draw_sprites.contains(entity) {
+					let draw = &draw_sprites[entity];
+					if let Some(sprite) = self.entity_atlas.get_entry_by_name(&draw.sprite_name) {
+						let (opx, opy) = co.to_linear();
+						let px = center_x + opx;
+						let py = center_y + opy;
+						let idx = sprite.get_atlas_idx();
+						let image_dim = self.entity_atlas.get_image(sprite.get_id()).dimensions();
+						let batch = &mut self.entity_spritebatches[idx];
+						let src =
+							Rect::new(sprite.left(), sprite.top(), sprite.width(), sprite.height());
+						let dest = [px + draw.rect.x, py + draw.rect.y];
+						let offset = [0.5, 0.5];
+						// No clue why the size of the sprite is dependent on the size of the source image..
+						// Seems like an excessively bad mis-design...  o.O
+						// So... undo that ggez brokenness...
+						let scale = [
+							1.0 / (image_dim.w * sprite.width()),
+							1.0 / (image_dim.h * sprite.height()),
+						];
+						let params = DrawParam::new()
+							.src(src)
+							.dest(dest)
+							.offset(offset)
+							.scale(scale);
+						batch.add(params);
 					}
 				}
 			}
@@ -811,62 +901,60 @@ impl GameState {
 				.map(|_| (false, graphics::MeshBuilder::new()))
 				.collect();
 
-			let tile_map = &engine
+			let tile_map = engine
 				.maps
 				.get(&self.visible_map)
 				.with_context(|| format!("Unable to load visible map: {}", self.visible_map))?;
 			let radius = self.screen_tiles * self.aspect_ratio + 1.0;
-			let radius = if radius.abs() > 16.0 {
-				16i8
+			let radius = if radius.abs() > 20.0 {
+				20u8
 			} else {
-				radius.abs() as i8
+				radius.abs() as u8
 			};
-			for c in
-				Coord::from_linear(self.view_center.x, self.view_center.y).iter_neighbors(radius)
-			{
-				let (px, py) = c.to_linear();
-				let px = px;
-				let py = py;
-				if let Some(tile) = tile_map.get_tile(c) {
-					let tile_drawable = &self.tiles_drawable[tile.id as usize];
-					let uv = self.tiles_atlas.get_entry(tile_drawable.atlas_id);
-					let mut pos = tile_drawable.info.bounds;
-					pos.translate([px, py]);
-					let color = tile_drawable.info.color;
-					let color: [f32; 4] = [color.r, color.g, color.b, color.a];
-					let (active, mesh_builder) = &mut mesh_builders[uv.get_atlas_idx()];
-					*active = true;
-					mesh_builder.raw(
-						&[
-							Vertex {
-								// left-top
-								pos: [pos.left(), pos.top()],
-								uv: [uv.left(), uv.top()],
-								color,
-							},
-							Vertex {
-								// left-bottom
-								pos: [pos.left(), pos.bottom()],
-								uv: [uv.left(), uv.bottom()],
-								color,
-							},
-							Vertex {
-								// right-bottom
-								pos: [pos.right(), pos.bottom()],
-								uv: [uv.right(), uv.bottom()],
-								color,
-							},
-							Vertex {
-								// right-top
-								pos: [pos.right(), pos.top()],
-								uv: [uv.right(), uv.top()],
-								color,
-							},
-						],
-						&[0, 1, 2, 0, 2, 3],
-						None,
-					);
-				}
+			let center = Coord::from_linear(self.view_center.x, self.view_center.y);
+			let (center_x, center_y) = center.to_linear();
+			for (co, tile) in tile_map.iter_neighbors_around(center, radius) {
+				let (opx, opy) = co.to_linear();
+				let px = center_x + opx;
+				let py = center_y + opy;
+				let tile_drawable = &self.tiles_drawable[tile.id as usize];
+				let uv = self.tiles_atlas.get_entry(tile_drawable.atlas_id);
+				let mut pos = tile_drawable.info.bounds;
+				pos.translate([px, py]);
+				let color = tile_drawable.info.color;
+				let color: [f32; 4] = [color.r, color.g, color.b, color.a];
+				let (active, mesh_builder) = &mut mesh_builders[uv.get_atlas_idx()];
+				*active = true;
+				mesh_builder.raw(
+					&[
+						Vertex {
+							// left-top
+							pos: [pos.left(), pos.top()],
+							uv: [uv.left(), uv.top()],
+							color,
+						},
+						Vertex {
+							// left-bottom
+							pos: [pos.left(), pos.bottom()],
+							uv: [uv.left(), uv.bottom()],
+							color,
+						},
+						Vertex {
+							// right-bottom
+							pos: [pos.right(), pos.bottom()],
+							uv: [uv.right(), uv.bottom()],
+							color,
+						},
+						Vertex {
+							// right-top
+							pos: [pos.right(), pos.top()],
+							uv: [uv.right(), uv.top()],
+							color,
+						},
+					],
+					&[0, 1, 2, 0, 2, 3],
+					None,
+				);
 			}
 			self.tiles_meshes.clear();
 			for (idx, (active, mut builder)) in mesh_builders.into_iter().enumerate() {
@@ -911,11 +999,11 @@ impl GameState {
 		let ctx = &mut self.ctx;
 		if let Some(mesh) = selected_mesh {
 			ecs.run(
-				|coords: View<Coord>,
+				|coords: View<MapCoord>,
 				 selected: View<components::IsSelected>|
 				 -> anyhow::Result<()> {
-					for (_, coord) in (&selected, &coords).iter() {
-						let (x, y) = coord.to_linear();
+					for (_, c) in (&selected, &coords).iter() {
+						let (x, y) = c.coord.to_linear();
 						mesh.draw(ctx, DrawParam::new().dest(na::Point2::new(x, y)))?;
 					}
 
