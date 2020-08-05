@@ -1,5 +1,3 @@
-use crate::core::engine::IndexMaps;
-use crate::core::structures::typed_index_map::TypedIndexMapIndex;
 use std::ops::{Add, Neg, Sub};
 
 /// Hex Coordinates, cubic notation but axial stored.
@@ -447,12 +445,6 @@ impl Iterator for CoordOrientationNeighborIterator {
 		self.ring_iter = CoordOrientationRingIterator::new(self.ring_iter.distance + 1);
 		self.ring_iter.next()
 	}
-}
-
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
-pub struct MapCoord {
-	pub map: TypedIndexMapIndex<IndexMaps>,
-	pub coord: Coord,
 }
 
 #[cfg(test)]

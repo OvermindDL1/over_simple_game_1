@@ -19,7 +19,7 @@ use winit::{
 	VirtualKeyCode, WindowEvent,
 };
 
-use over_simple_game_1::core::map::coord::{CoordOrientationNeighborIterator, MapCoord};
+use over_simple_game_1::core::engine::MapCoord;
 use over_simple_game_1::core::map::generator::SimpleAlternationMapGenerator;
 use over_simple_game_1::games::civ::CivGame;
 use over_simple_game_1::prelude::*;

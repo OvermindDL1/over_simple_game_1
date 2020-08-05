@@ -10,7 +10,7 @@ use crate::core::map::tile_map::{TileMap, TileMapError};
 use std::fmt::Debug;
 
 use crate::core::engine::io::EngineIO;
-use crate::core::map::coord::MapCoord;
+use crate::core::map::coord::Coord;
 use crate::core::structures::typed_index_map::{
 	TypedIndexMap, TypedIndexMapError, TypedIndexMapIndex,
 };
@@ -34,12 +34,12 @@ pub enum EngineError<IO: EngineIO + 'static> {
 	#[error("map storage full, unable to create new map")]
 	UnableToInsertMap {
 		#[from]
-		source: TypedIndexMapError<String, TileMap>,
+		source: TypedIndexMapError<String, TileMap, u32>,
 		//backtrace: Backtrace, // Still needs nightly...
 	},
 
 	#[error("requested map does not exist at ID: {0:?}")]
-	MapDoesNotExistsIdx(TypedIndexMapIndex<IndexMaps>),
+	MapDoesNotExistsIdx(MapIdx),
 
 	#[error("failed to generate tile map")]
 	TileMapGenerationFailed {
@@ -55,9 +55,17 @@ pub enum EngineError<IO: EngineIO + 'static> {
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 pub enum IndexMaps {}
 
+pub type MapIdx = TypedIndexMapIndex<IndexMaps, u32>;
+
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
+pub struct MapCoord {
+	pub map: MapIdx,
+	pub coord: Coord,
+}
+
 pub struct Engine<IO: EngineIO> {
 	pub tile_types: TileTypes<IO>,
-	pub maps: TypedIndexMap<IndexMaps, String, TileMap>,
+	pub maps: TypedIndexMap<IndexMaps, String, TileMap, u32>,
 }
 
 impl<IO: EngineIO> Engine<IO> {

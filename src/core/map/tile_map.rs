@@ -1,8 +1,6 @@
 use thiserror::*;
 
-use crate::core::map::coord::{
-	Coord, CoordOrientation, CoordOrientationNeighborIterator, MapCoord,
-};
+use crate::core::map::coord::{Coord, CoordOrientation, CoordOrientationNeighborIterator};
 use crate::core::map::generator::MapGenerator;
 use crate::core::map::tile::Tile;
 

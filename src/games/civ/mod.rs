@@ -5,8 +5,6 @@ use shipyard::*;
 
 use crate::core::component::ComponentAutoLoadable;
 use crate::core::engine::io::EngineIO;
-use crate::core::engine::Engine;
-use crate::core::map::coord::MapCoord;
 
 pub mod maps;
 
