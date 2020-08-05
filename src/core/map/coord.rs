@@ -481,14 +481,15 @@ mod coord_tests {
 			assert_eq!(iter.next(), None);
 		}
 		{
-			let mut iter = CoordOrientationRingIterator::new(1);
-			assert_eq!(iter.next(), Some(CoordOrientation::new_axial(1, 0)));
-			assert_eq!(iter.next(), Some(CoordOrientation::new_axial(0, 1)));
-			assert_eq!(iter.next(), Some(CoordOrientation::new_axial(-1, 1)));
-			assert_eq!(iter.next(), Some(CoordOrientation::new_axial(-1, 0)));
-			assert_eq!(iter.next(), Some(CoordOrientation::new_axial(0, -1)));
-			assert_eq!(iter.next(), Some(CoordOrientation::new_axial(1, -1)));
-			assert_eq!(iter.next(), None);
+			let coords = CoordOrientationRingIterator::new(1)
+                .collect::<HashSet<CoordOrientation>>();
+			assert!(coords.contains(&CoordOrientation::new_axial(1, 0)));
+			assert!(coords.contains(&CoordOrientation::new_axial(0, 1)));
+			assert!(coords.contains(&CoordOrientation::new_axial(-1, 1)));
+			assert!(coords.contains(&CoordOrientation::new_axial(-1, 0)));
+			assert!(coords.contains(&CoordOrientation::new_axial(0, -1)));
+			assert!(coords.contains(&CoordOrientation::new_axial(1, -1)));
+			assert_eq!(coords.len(), 6);
 		}
 	}
 
