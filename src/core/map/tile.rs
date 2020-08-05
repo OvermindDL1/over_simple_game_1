@@ -168,3 +168,127 @@ impl<IO: EngineIO> TileTypes<IO> {
 	// 	Ok(idx as TileIdx)
 	// }
 }
+
+#[cfg(test)]
+mod tile_tests {
+	use super::*;
+	use proptest::prelude::*;
+	use std::{convert::Infallible, hash::Hasher, path::PathBuf};
+
+	#[derive(Debug, Default, Eq, PartialEq)]
+	struct DummyIO {}
+
+	impl EngineIO for DummyIO {
+		type ReadError = Infallible;
+		type Read = &'static [u8];
+
+		fn read(&mut self, _: PathBuf) -> Result<Self::Read, Self::ReadError> {
+			Ok(b"")
+		}
+
+		type TileInterface = ();
+
+		fn blank_tile_interface() -> Self::TileInterface {}
+
+		type TileAddedError = Infallible;
+
+		fn tile_added(
+			&mut self,
+			_: usize,
+			_: &mut TileType<Self>,
+		) -> Result<(), Self::TileAddedError> {
+			Ok(())
+		}
+	}
+
+	impl PartialEq for TileType<DummyIO> {
+		fn eq(&self, other: &Self) -> bool {
+			self.name == other.name
+		}
+	}
+	impl Eq for TileType<DummyIO> {}
+
+	impl std::hash::Hash for TileType<DummyIO> {
+		fn hash<H: Hasher>(&self, state: &mut H) {
+			self.name.hash(state);
+		}
+	}
+
+	fn tiletype_strategy_generator(regex: &str) -> BoxedStrategy<TileType<DummyIO>> {
+		prop::string::string_regex(regex)
+			.expect("failed to generate strategy from regex")
+			.prop_map(|s| TileType {
+				name: s,
+				interface: (),
+			})
+			.boxed()
+	}
+
+	fn rand_dummy_tiletype_strategy() -> BoxedStrategy<TileType<DummyIO>> {
+		tiletype_strategy_generator(".*")
+	}
+
+	fn non_empty_tiletype_strategy() -> BoxedStrategy<TileType<DummyIO>> {
+		tiletype_strategy_generator(".+")
+	}
+
+	proptest!(
+		#[test]
+		fn first_tiletype_should_be_unique(tt in rand_dummy_tiletype_strategy()) {
+			let mut dummy_io = DummyIO::default();
+			let mut tts = TileTypes::new();
+			if let Err(TileTypesError::DuplicateTileTypeName(s)) = tts.add_tile(&mut dummy_io, tt) {
+				prop_assert!(false, "TileType {} marked as duplicate, but it is the only one added", s);
+			}
+		}
+	);
+
+	proptest!(
+		#[test]
+		fn non_empty_tiletypes_are_valid(tt in non_empty_tiletype_strategy()) {
+			let mut dummy_io = DummyIO::default();
+			let mut tts = TileTypes::new();
+			let name = tt.name.clone();     // I really don't want to do this, but add_tile consumes
+			if let Err(TileTypesError::InvalidTileTypeData(s)) = tts.add_tile(&mut dummy_io, tt) {
+				prop_assert!(false, "TileType {} marked invalid because {}", name, s);
+			}
+		}
+	);
+
+	proptest!(
+		#![proptest_config(ProptestConfig::with_cases(30))]
+		#[test]
+		fn many_valid_tiletypes_get_accepted(
+			// I would use 2..TileIdx::MAX for the size but it pins the cpu
+			tt_set in prop::collection::hash_set(non_empty_tiletype_strategy(), 2..500)
+		) {
+			let mut dummy_io = DummyIO::default();
+			let mut tts = TileTypes::new();
+			for tt in tt_set {
+				// I would use prop_assert_ne!(add_tile, Ok(())) but it needs PartialEq
+				if let Err(e) = tts.add_tile(&mut dummy_io, tt) {
+					prop_assert!(false, "{}", e);
+				}
+			}
+		}
+	);
+
+	#[test]
+	fn empty_tiletypes_are_rejected() {
+		let tt = TileType::<DummyIO> {
+			name: String::from(""),
+			interface: (),
+		};
+		let mut dummy_io = DummyIO::default();
+		let mut tts = TileTypes::new();
+
+		if let Err(TileTypesError::InvalidTileTypeData(s)) = tts.add_tile(&mut dummy_io, tt) {
+			if s == "name is empty" {
+			} else {
+				panic!("empty string marked with incorrect error: {}", s);
+			}
+		} else {
+			panic!("empty string not marked as error");
+		}
+	}
+}

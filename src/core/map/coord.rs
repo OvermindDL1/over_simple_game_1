@@ -474,28 +474,31 @@ mod coord_tests {
 	}
 
 	#[test]
-	fn coord_orientation_ring_iterator_count() {
+	fn coord_orientation_ring_iterator_small_count() {
 		{
 			let mut iter = CoordOrientationRingIterator::new(0);
 			assert_eq!(iter.next(), Some(CoordOrientation::new_axial(0, 0)));
 			assert_eq!(iter.next(), None);
 		}
 		{
-			let mut iter = CoordOrientationRingIterator::new(1);
-			assert_eq!(iter.next(), Some(CoordOrientation::new_axial(1, 0)));
-			assert_eq!(iter.next(), Some(CoordOrientation::new_axial(0, 1)));
-			assert_eq!(iter.next(), Some(CoordOrientation::new_axial(-1, 1)));
-			assert_eq!(iter.next(), Some(CoordOrientation::new_axial(-1, 0)));
-			assert_eq!(iter.next(), Some(CoordOrientation::new_axial(0, -1)));
-			assert_eq!(iter.next(), Some(CoordOrientation::new_axial(1, -1)));
-			assert_eq!(iter.next(), None);
+			let coords =
+				CoordOrientationRingIterator::new(1).collect::<HashSet<CoordOrientation>>();
+			assert!(coords.contains(&CoordOrientation::new_axial(1, 0)));
+			assert!(coords.contains(&CoordOrientation::new_axial(0, 1)));
+			assert!(coords.contains(&CoordOrientation::new_axial(-1, 1)));
+			assert!(coords.contains(&CoordOrientation::new_axial(-1, 0)));
+			assert!(coords.contains(&CoordOrientation::new_axial(0, -1)));
+			assert!(coords.contains(&CoordOrientation::new_axial(1, -1)));
+			assert_eq!(coords.len(), 6);
 		}
-		for distance in 1..5u8 {
-			let iter = CoordOrientationRingIterator::new(distance);
-			let mut around = HashSet::<CoordOrientation>::new();
-			for c in iter {
-				around.insert(c);
-			}
+	}
+
+	proptest!(
+		#![proptest_config(ProptestConfig::with_cases(30))]
+		#[test]
+		fn coord_orientation_ring_iterator_big_count(distance in 2..128u8) {
+			let around = CoordOrientationRingIterator::new(distance)
+				.collect::<HashSet<CoordOrientation>>();
 			assert_eq!(
 				around.len(),
 				(distance as usize * 6),
@@ -504,36 +507,34 @@ mod coord_tests {
 				around
 			);
 		}
-	}
+	);
 
 	#[test]
-	fn coord_orientation_neighbor_iterator_count() {
-		{
-			let mut iter = CoordOrientationNeighborIterator::new(0);
-			assert_eq!(iter.next(), Some(CoordOrientation::new_axial(0, 0)));
-			assert_eq!(iter.next(), None);
-		}
-		for distance in 1..5u8 {
-			let iter = CoordOrientationNeighborIterator::new(distance);
-			let mut around = HashSet::<CoordOrientation>::new();
-			for c in iter {
-				around.insert(c);
-			}
+	fn coord_orientation_neighbor_iterator_small_count() {
+		let mut iter = CoordOrientationNeighborIterator::new(0);
+		assert_eq!(iter.next(), Some(CoordOrientation::new_axial(0, 0)));
+		assert_eq!(iter.next(), None);
+	}
+
+	proptest!(
+		#![proptest_config(ProptestConfig::with_cases(30))]
+		#[test]
+		fn coord_orientation_neighbor_iterator_big_count(distance in 1..128u8) {
+			let around = CoordOrientationNeighborIterator::new(distance)
+				.collect::<HashSet<CoordOrientation>>();
 			assert_eq!(
 				around.len(),
-				(1..=distance).fold(1, |acc, i| { acc + (i as usize * 6) }),
+				3 * ((distance as usize).pow(2) + distance as usize) + 1,
 				"Distance {} missing/extra values, generated: {:?}",
 				distance,
 				around
 			);
 		}
-	}
+	);
 
 	proptest!(
 		#[test]
-		fn coord_to_linear_from_linear(q: u8, r: u8) {
-			let axial = Coord::new_axial(q, r);
-
+		fn coord_to_linear_from_linear(axial in rand_coord_strategy()) {
 			let (x, y) = axial.to_linear();
 			let axial_to_from = Coord::from_linear(x, y);
 
