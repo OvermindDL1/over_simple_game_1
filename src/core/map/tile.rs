@@ -254,6 +254,7 @@ mod tile_tests {
 	);
 
 	proptest!(
+        #![proptest_config(ProptestConfig::with_cases(30))]
 		#[test]
 		fn many_valid_tiletypes_get_accepted(
 			// I would use 2..TileIdx::MAX for the size but it pins the cpu

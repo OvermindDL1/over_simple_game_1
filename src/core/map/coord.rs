@@ -493,6 +493,7 @@ mod coord_tests {
 	}
 
     proptest!(
+        #![proptest_config(ProptestConfig::with_cases(30))]
         #[test]
         fn coord_orientation_ring_iterator_big_count(distance in 2..128u8) {
 			let iter = CoordOrientationRingIterator::new(distance);
@@ -520,6 +521,7 @@ mod coord_tests {
 	}
 
     proptest!(
+        #![proptest_config(ProptestConfig::with_cases(30))]
         #[test]
         fn coord_orientation_neighbor_iterator_big_count(distance in 1..128u8) {
 			let iter = CoordOrientationNeighborIterator::new(distance);
