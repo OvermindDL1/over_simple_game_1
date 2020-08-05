@@ -38,8 +38,7 @@ impl SimpleAlternationMapGenerator {
 				.tile_types
 				.tile_types
 				.get_index_of(name)
-				.with_context(|| format!("missing tile type: {}", name))?
-				.index() as u16;
+				.with_context(|| format!("missing tile type: {}", name))?;
 			tiles.push(idx)
 		}
 		Ok(SimpleAlternationMapGenerator(tiles))

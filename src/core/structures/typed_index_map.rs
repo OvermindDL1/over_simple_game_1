@@ -8,46 +8,58 @@ use std::marker::PhantomData;
 use std::ops::RangeFull;
 
 use indexmap::{map::*, *};
-use serde::export::Formatter;
+use std::fmt::Formatter;
 
-#[derive(Debug)]
-pub enum TypedIndexMapError<I: TypedIndexMapIndexType> {
-	TypedIndexMapFull(I),
+pub enum TypedIndexMapError<K, V, I: TypedIndexMapIndexType = usize> {
+	TypedIndexMapFull(I, K, V),
 }
 
-impl<I: TypedIndexMapIndexType> std::fmt::Display for TypedIndexMapError<I> {
-	fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
+impl<K, V, I: TypedIndexMapIndexType> Debug for TypedIndexMapError<K, V, I> {
+	fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
+		use TypedIndexMapError::*;
 		match self {
-			TypedIndexMapError::TypedIndexMapFull(size) => {
-				f.write_fmt(format_args!("TypedIndexMap index is full: {:?}", size))
+			TypedIndexMapFull(max, _key, _value) => {
+				f.debug_tuple("TypedIndexMapFull").field(max).finish()
 			}
 		}
 	}
 }
 
-impl<I: TypedIndexMapIndexType> std::error::Error for TypedIndexMapError<I> {
+impl<K, V, I: TypedIndexMapIndexType> std::fmt::Display for TypedIndexMapError<K, V, I> {
+	fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
+		match self {
+			TypedIndexMapError::TypedIndexMapFull(size, _k, _v) => {
+				f.write_fmt(format_args!("TypedIndexMap index is full with {:?}", size))
+			}
+		}
+	}
+}
+
+impl<K, V, I: TypedIndexMapIndexType> std::error::Error for TypedIndexMapError<K, V, I> {
 	fn source(&self) -> Option<&(dyn Error + 'static)> {
 		None
 	}
 }
 
 pub trait TypedIndexMapIndexType: Copy + fmt::Debug {
+	const MAX: Self;
 	fn to_usize(self) -> usize;
-	fn try_from_usize(index: usize) -> Result<Self, TypedIndexMapError<Self>>;
+	fn try_from_usize(index: usize) -> Option<Self>;
 	fn from_usize(index: usize) -> Self;
 }
 
 macro_rules! implement_primitive_typed_index_map_index_type {
 	($typ:ty) => {
 		impl TypedIndexMapIndexType for $typ {
+			const MAX: Self = <$typ>::MAX;
 			fn to_usize(self) -> usize {
 				self as usize
 			}
-			fn try_from_usize(index: usize) -> Result<Self, TypedIndexMapError<Self>> {
+			fn try_from_usize(index: usize) -> Option<Self> {
 				if index <= Self::MAX as usize {
-					Ok(index as Self)
+					Some(index as Self)
 				} else {
-					Err(TypedIndexMapError::TypedIndexMapFull(Self::MAX))
+					None
 				}
 			}
 			fn from_usize(index: usize) -> Self {
@@ -70,8 +82,8 @@ pub struct TypedIndexMapIndex<T, IndexType: TypedIndexMapIndexType = usize>(
 );
 
 impl<T, I: TypedIndexMapIndexType> TypedIndexMapIndex<T, I> {
-	fn try_new(index: usize) -> Result<Self, TypedIndexMapError<I>> {
-		Ok(TypedIndexMapIndex(
+	fn try_new(index: usize) -> Option<Self> {
+		Some(TypedIndexMapIndex(
 			I::try_from_usize(index)?,
 			Default::default(),
 		))
@@ -81,7 +93,10 @@ impl<T, I: TypedIndexMapIndexType> TypedIndexMapIndex<T, I> {
 		TypedIndexMapIndex(I::from_usize(index), Default::default())
 	}
 
-	pub fn index(self) -> usize {
+	pub const MAX: I = I::MAX;
+}
+impl<T, I: TypedIndexMapIndexType> Into<usize> for TypedIndexMapIndex<T, I> {
+	fn into(self) -> usize {
 		self.0.to_usize()
 	}
 }
@@ -244,7 +259,7 @@ where
 	/// See also [`entry`](#method.entry) if you you want to insert *or* modify
 	/// or if you need to get the index of the corresponding key-value pair.
 	#[inline]
-	pub fn insert(&mut self, key: K, value: V) -> Result<Option<V>, TypedIndexMapError<I>> {
+	pub fn insert(&mut self, key: K, value: V) -> Result<Option<V>, TypedIndexMapError<K, V, I>> {
 		Ok(self.insert_full(key, value)?.1)
 	}
 
@@ -266,9 +281,12 @@ where
 		&mut self,
 		key: K,
 		value: V,
-	) -> Result<(TypedIndexMapIndex<T, I>, Option<V>), TypedIndexMapError<I>> {
+	) -> Result<(TypedIndexMapIndex<T, I>, Option<V>), TypedIndexMapError<K, V, I>> {
+		if TypedIndexMapIndex::<T, I>::try_new(self.index_map.len()).is_none() {
+			return Err(TypedIndexMapError::TypedIndexMapFull(I::MAX, key, value));
+		}
 		let (idx, res) = self.index_map.insert_full(key, value);
-		Ok((TypedIndexMapIndex::try_new(idx)?, res))
+		Ok((TypedIndexMapIndex::new(idx), res))
 	}
 
 	/// Get the given key’s corresponding entry in the map for insertion and/or
@@ -625,7 +643,7 @@ where
 	/// Computes in **O(1)** time.
 	#[inline]
 	pub fn get_index(&self, index: TypedIndexMapIndex<T, I>) -> Option<(&K, &V)> {
-		self.index_map.get_index(index.index())
+		self.index_map.get_index(index.into())
 	}
 
 	/// Get a key-value pair by index
@@ -635,7 +653,7 @@ where
 	/// Computes in **O(1)** time.
 	#[inline]
 	pub fn get_index_mut(&mut self, index: TypedIndexMapIndex<T, I>) -> Option<(&mut K, &mut V)> {
-		self.index_map.get_index_mut(index.index())
+		self.index_map.get_index_mut(index.into())
 	}
 
 	/// Remove the key-value pair by index
@@ -649,7 +667,7 @@ where
 	/// Computes in **O(1)** time (average).
 	#[inline]
 	pub fn swap_remove_index(&mut self, index: TypedIndexMapIndex<T, I>) -> Option<(K, V)> {
-		self.index_map.swap_remove_index(index.index())
+		self.index_map.swap_remove_index(index.into())
 	}
 
 	/// Remove the key-value pair by index
@@ -663,6 +681,6 @@ where
 	/// Computes in **O(n)** time (average).
 	#[inline]
 	pub fn shift_remove_index(&mut self, index: TypedIndexMapIndex<T, I>) -> Option<(K, V)> {
-		self.index_map.shift_remove_index(index.index())
+		self.index_map.shift_remove_index(index.into())
 	}
 }

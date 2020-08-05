@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
-use crate::core::map::tile::TileType;
+use crate::core::map::tile::{TileIdx, TileType};
 use std::convert::Infallible;
 
 /// A simple Input/Output interface to get readers/writers from file names.
@@ -21,7 +21,7 @@ pub trait EngineIO: Debug + Sized {
 	type TileAddedError: std::error::Error + Send + Sync + 'static;
 	fn tile_added(
 		&mut self,
-		index: usize,
+		index: TileIdx,
 		tile_type: &mut TileType<Self>,
 	) -> Result<(), Self::TileAddedError>;
 }
@@ -66,7 +66,7 @@ impl EngineIO for DirectFilesystemSimpleIO {
 
 	fn tile_added(
 		&mut self,
-		_index: usize,
+		_index: TileIdx,
 		_tile_type: &mut TileType<Self>,
 	) -> Result<(), Self::TileAddedError> {
 		Ok(())

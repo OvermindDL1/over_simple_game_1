@@ -11,7 +11,9 @@ use std::fmt::Debug;
 
 use crate::core::engine::io::EngineIO;
 use crate::core::map::coord::MapCoord;
-use crate::core::structures::typed_index_map::{TypedIndexMap, TypedIndexMapIndex};
+use crate::core::structures::typed_index_map::{
+	TypedIndexMap, TypedIndexMapError, TypedIndexMapIndex,
+};
 use shipyard::{EntitiesView, EntityId, ViewMut};
 
 #[derive(Error, Debug)]
@@ -28,6 +30,13 @@ pub enum EngineError<IO: EngineIO + 'static> {
 
 	#[error("requested map does not exist: {0}")]
 	MapDoesNotExists(String),
+
+	#[error("map storage full, unable to create new map")]
+	UnableToInsertMap {
+		#[from]
+		source: TypedIndexMapError<String, TileMap>,
+		//backtrace: Backtrace, // Still needs nightly...
+	},
 
 	#[error("requested map does not exist at ID: {0:?}")]
 	MapDoesNotExistsIdx(TypedIndexMapIndex<IndexMaps>),
@@ -85,7 +94,9 @@ impl<IO: EngineIO> Engine<IO> {
 		}
 
 		let tile_map = TileMap::new(max_x, max_y, wraps_x, generator)?;
-		self.maps.insert(name, tile_map);
+		self.maps
+			.insert(name, tile_map)
+			.map_err(|source| EngineError::UnableToInsertMap { source })?;
 
 		Ok(())
 	}

@@ -5,12 +5,12 @@ use std::path::PathBuf;
 use std::time::Instant;
 
 use anyhow::Context as AnyContext;
-use ggez::{Context, ContextBuilder, GameError, graphics};
 use ggez::conf::{FullscreenType, NumSamples, WindowMode, WindowSetup};
-use ggez::graphics::{Color, Drawable, DrawMode, DrawParam, FilterMode, Rect, Vertex};
 use ggez::graphics::spritebatch::SpriteBatch;
+use ggez::graphics::{Color, DrawMode, DrawParam, Drawable, FilterMode, Rect, Vertex};
 use ggez::input::{keyboard, mouse};
 use ggez::nalgebra as na;
+use ggez::{graphics, Context, ContextBuilder, GameError};
 use log::*;
 use serde::{Deserialize, Serialize};
 use shipyard::*;
@@ -135,7 +135,7 @@ impl EngineIO for GameState {
 
 	fn tile_added(
 		&mut self,
-		_index: usize,
+		_index: TileIdx,
 		_tile_type: &mut TileType<Self>,
 	) -> Result<(), Self::TileAddedError> {
 		Ok(())
@@ -224,8 +224,6 @@ impl Game {
 			|mut all_storages: AllStoragesViewMut| -> anyhow::Result<()> {
 				let entity =
 					civ.create_entity_from_template(state, "test_unit", &mut all_storages)?;
-				// let entities = all_storages.try_borrow::<EntitiesView>()?;
-				// let coords = all_storages.try_borrow::<ViewMut<MapCoord>>
 				engine.move_entity_to_coord(
 					entity,
 					coord,
@@ -917,7 +915,8 @@ impl GameState {
 				let (opx, opy) = co.to_linear();
 				let px = center_x + opx;
 				let py = center_y + opy;
-				let tile_drawable = &self.tiles_drawable[tile.id as usize];
+				let idx: usize = tile.id.into();
+				let tile_drawable = &self.tiles_drawable[idx];
 				let uv = self.tiles_atlas.get_entry(tile_drawable.atlas_id);
 				let mut pos = tile_drawable.info.bounds;
 				pos.translate([px, py]);

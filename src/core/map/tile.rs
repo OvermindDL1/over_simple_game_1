@@ -5,9 +5,14 @@ use shipyard::EntityId;
 use thiserror::*;
 
 use crate::core::engine::io::EngineIO;
-use crate::core::structures::typed_index_map::TypedIndexMap;
+use crate::core::structures::typed_index_map::{
+	TypedIndexMap, TypedIndexMapError, TypedIndexMapIndex,
+};
 
-pub type TileIdx = u16;
+#[derive(Clone, Copy, Debug)]
+pub enum TileTypesMap {}
+
+pub type TileIdx = TypedIndexMapIndex<TileTypesMap, u16>;
 
 #[derive(Debug)]
 pub struct Tile {
@@ -30,11 +35,9 @@ pub struct TileType<IO: EngineIO> {
 	pub interface: IO::TileInterface,
 }
 
-pub enum TileTypesMap {}
-
 #[derive(Debug)]
 pub struct TileTypes<IO: EngineIO> {
-	pub tile_types: TypedIndexMap<TileTypesMap, String, TileType<IO>>,
+	pub tile_types: TypedIndexMap<TileTypesMap, String, TileType<IO>, u16>,
 }
 
 #[derive(Error, Debug)]
@@ -82,8 +85,6 @@ impl<IO: EngineIO> TileTypes<IO> {
 		TileTypes {
 			tile_types: TypedIndexMap::new(),
 		}
-
-		// let _ = tile_datas.get_index("unknown")?;
 	}
 
 	fn add_tile(
@@ -101,17 +102,32 @@ impl<IO: EngineIO> TileTypes<IO> {
 			return Err(TileTypesError::DuplicateTileTypeName(tile_type));
 		}
 
-		let idx = self.tile_types.len();
-		if idx > TileIdx::MAX as usize {
-			return Err(TileTypesError::TileTypesFilled(tile_type));
-		}
+		let (index, old_value) = self
+			.tile_types
+			.insert_full(tile_type.name.clone(), tile_type)
+			.map_err(|e| match e {
+				TypedIndexMapError::TypedIndexMapFull(_max, _key, tile_type) => {
+					TileTypesError::TileTypesFilled(tile_type)
+				}
+			})?;
 
-		match io.tile_added(idx, &mut tile_type) {
-			Ok(()) => {
-				self.tile_types.insert(tile_type.name.clone(), tile_type);
-				Ok(())
+		assert!(old_value.is_none());
+
+		match io.tile_added(
+			index,
+			self.tile_types
+				.get_index_mut(index)
+				.expect("unable to lookup just inserted value")
+				.1,
+		) {
+			Ok(()) => Ok(()),
+			Err(source) => {
+				let (_name, tile_type) = self
+					.tile_types
+					.pop()
+					.expect("unable to pop just inserted value?");
+				Err(TileTypesError::EngineIORegisterTileError { source, tile_type })
 			}
-			Err(source) => Err(TileTypesError::EngineIORegisterTileError { source, tile_type }),
 		}
 	}
 
@@ -201,7 +217,7 @@ mod tile_tests {
 
 		fn tile_added(
 			&mut self,
-			_: usize,
+			_: TileIdx,
 			_: &mut TileType<Self>,
 		) -> Result<(), Self::TileAddedError> {
 			Ok(())
