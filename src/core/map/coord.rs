@@ -474,7 +474,7 @@ mod coord_tests {
 	}
 
 	#[test]
-	fn coord_orientation_ring_iterator_count() {
+	fn coord_orientation_ring_iterator_small_count() {
 		{
 			let mut iter = CoordOrientationRingIterator::new(0);
 			assert_eq!(iter.next(), Some(CoordOrientation::new_axial(0, 0)));
@@ -490,7 +490,11 @@ mod coord_tests {
 			assert_eq!(iter.next(), Some(CoordOrientation::new_axial(1, -1)));
 			assert_eq!(iter.next(), None);
 		}
-		for distance in 1..5u8 {
+	}
+
+    proptest!(
+        #[test]
+        fn coord_orientation_ring_iterator_big_count(distance in 2..128u8) {
 			let iter = CoordOrientationRingIterator::new(distance);
 			let mut around = HashSet::<CoordOrientation>::new();
 			for c in iter {
@@ -503,17 +507,21 @@ mod coord_tests {
 				distance,
 				around
 			);
-		}
-	}
+        }
+    );
 
 	#[test]
-	fn coord_orientation_neighbor_iterator_count() {
+	fn coord_orientation_neighbor_iterator_small_count() {
 		{
 			let mut iter = CoordOrientationNeighborIterator::new(0);
 			assert_eq!(iter.next(), Some(CoordOrientation::new_axial(0, 0)));
 			assert_eq!(iter.next(), None);
 		}
-		for distance in 1..5u8 {
+	}
+
+    proptest!(
+        #[test]
+        fn coord_orientation_neighbor_iterator_big_count(distance in 1..128u8) {
 			let iter = CoordOrientationNeighborIterator::new(distance);
 			let mut around = HashSet::<CoordOrientation>::new();
 			for c in iter {
@@ -526,8 +534,8 @@ mod coord_tests {
 				distance,
 				around
 			);
-		}
-	}
+        }
+    );
 
 	proptest!(
 		#[test]
