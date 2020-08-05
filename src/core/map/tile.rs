@@ -55,24 +55,25 @@ where
 	},
 
 	#[error(
-		"tile types already filled to the max of {} when inserting {0}",
-		TileIdx::MAX
+		"tile types already filled to the max of {} when inserting {}",
+		TileIdx::MAX, .0.name
 	)]
-	TileTypesFilled(String),
+	TileTypesFilled(TileType<IO>),
 
 	#[error("tile types have already been loaded")]
 	TileTypesAlreadyFilled(),
 
 	#[error("generic invalid tile type data with message: {0}")]
-	InvalidTileTypeData(String),
+	InvalidTileTypeData(String, TileType<IO>),
 
-	#[error("attempted to insert a duplicate tile type name: {0}")]
-	DuplicateTileTypeName(String),
+	#[error("attempted to insert a duplicate tile type name: {}", .0.name)]
+	DuplicateTileTypeName(TileType<IO>),
 
 	#[error("callback to register_tile in EngineIO failed")]
 	EngineIORegisterTileError {
 		source: IO::TileAddedError,
 		//backtrace: Backtrace, // Still needs nightly...
+		tile_type: TileType<IO>,
 	},
 }
 
@@ -91,21 +92,27 @@ impl<IO: EngineIO> TileTypes<IO> {
 		mut tile_type: TileType<IO>,
 	) -> Result<(), TileTypesError<IO>> {
 		if tile_type.name.is_empty() {
-			return Err(TileTypesError::InvalidTileTypeData("name is empty".into()));
+			return Err(TileTypesError::InvalidTileTypeData(
+				"name is empty".into(),
+				tile_type,
+			));
 		}
 		if self.tile_types.contains_key(&tile_type.name) {
-			return Err(TileTypesError::DuplicateTileTypeName(tile_type.name));
+			return Err(TileTypesError::DuplicateTileTypeName(tile_type));
 		}
 
 		let idx = self.tile_types.len();
 		if idx > TileIdx::MAX as usize {
-			return Err(TileTypesError::TileTypesFilled(tile_type.name));
+			return Err(TileTypesError::TileTypesFilled(tile_type));
 		}
 
-		io.tile_added(idx, &mut tile_type)
-			.map_err(|source| TileTypesError::EngineIORegisterTileError { source })?;
-		self.tile_types.insert(tile_type.name.clone(), tile_type);
-		Ok(())
+		match io.tile_added(idx, &mut tile_type) {
+			Ok(()) => {
+				self.tile_types.insert(tile_type.name.clone(), tile_type);
+				Ok(())
+			}
+			Err(source) => Err(TileTypesError::EngineIORegisterTileError { source, tile_type }),
+		}
 	}
 
 	pub(crate) fn load_tiles(&mut self, io: &mut IO) -> Result<(), TileTypesError<IO>> {
@@ -237,8 +244,8 @@ mod tile_tests {
 		fn first_tiletype_should_be_unique(tt in rand_dummy_tiletype_strategy()) {
 			let mut dummy_io = DummyIO::default();
 			let mut tts = TileTypes::new();
-			if let Err(TileTypesError::DuplicateTileTypeName(s)) = tts.add_tile(&mut dummy_io, tt) {
-				prop_assert!(false, "TileType {} marked as duplicate, but it is the only one added", s);
+			if let Err(TileTypesError::DuplicateTileTypeName(tile_type)) = tts.add_tile(&mut dummy_io, tt) {
+				prop_assert!(false, "TileType {} marked as duplicate, but it is the only one added", tile_type.name);
 			}
 		}
 	);
@@ -248,9 +255,8 @@ mod tile_tests {
 		fn non_empty_tiletypes_are_valid(tt in non_empty_tiletype_strategy()) {
 			let mut dummy_io = DummyIO::default();
 			let mut tts = TileTypes::new();
-			let name = tt.name.clone();     // I really don't want to do this, but add_tile consumes
-			if let Err(TileTypesError::InvalidTileTypeData(s)) = tts.add_tile(&mut dummy_io, tt) {
-				prop_assert!(false, "TileType {} marked invalid because {}", name, s);
+			if let Err(TileTypesError::InvalidTileTypeData(reason, tile_type)) = tts.add_tile(&mut dummy_io, tt) {
+				prop_assert!(false, "TileType {} marked invalid because {}", tile_type.name, reason);
 			}
 		}
 	);
@@ -274,7 +280,7 @@ mod tile_tests {
 	);
 
 	#[test]
-	fn empty_tiletypes_are_rejected() {
+	fn empty_tile_types_are_rejected() {
 		let tt = TileType::<DummyIO> {
 			name: String::from(""),
 			interface: (),
@@ -282,10 +288,14 @@ mod tile_tests {
 		let mut dummy_io = DummyIO::default();
 		let mut tts = TileTypes::new();
 
-		if let Err(TileTypesError::InvalidTileTypeData(s)) = tts.add_tile(&mut dummy_io, tt) {
-			if s == "name is empty" {
-			} else {
-				panic!("empty string marked with incorrect error: {}", s);
+		if let Err(TileTypesError::InvalidTileTypeData(reason, tile_type)) =
+			tts.add_tile(&mut dummy_io, tt)
+		{
+			if reason != "name is empty" {
+				panic!(
+					"empty string marked with incorrect error: {}",
+					tile_type.name
+				);
 			}
 		} else {
 			panic!("empty string not marked as error");
