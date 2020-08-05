@@ -1,26 +1,99 @@
-use indexmap::{map::*, *};
-use serde::export::PhantomData;
 use std::cmp::Ordering;
 use std::collections::hash_map::RandomState;
+use std::error::Error;
 use std::fmt;
+use std::fmt::Debug;
 use std::hash::{BuildHasher, Hash};
+use std::marker::PhantomData;
 use std::ops::RangeFull;
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
-pub struct TypedIndexMapIndex<T>(usize, PhantomData<T>);
+use indexmap::{map::*, *};
+use serde::export::Formatter;
 
-impl<T> TypedIndexMapIndex<T> {
-	pub fn index(&self) -> usize {
-		self.0
+#[derive(Debug)]
+pub enum TypedIndexMapError<I: TypedIndexMapIndexType> {
+	TypedIndexMapFull(I),
+}
+
+impl<I: TypedIndexMapIndexType> std::fmt::Display for TypedIndexMapError<I> {
+	fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
+		match self {
+			TypedIndexMapError::TypedIndexMapFull(size) => {
+				f.write_fmt(format_args!("TypedIndexMap index is full: {:?}", size))
+			}
+		}
 	}
 }
 
-pub struct TypedIndexMap<T, K, V, S = RandomState> {
-	index_map: IndexMap<K, V, S>,
-	_phantom: PhantomData<T>,
+impl<I: TypedIndexMapIndexType> std::error::Error for TypedIndexMapError<I> {
+	fn source(&self) -> Option<&(dyn Error + 'static)> {
+		None
+	}
 }
 
-impl<T, K: Clone, V: Clone, S: Clone> Clone for TypedIndexMap<T, K, V, S> {
+pub trait TypedIndexMapIndexType: Copy + fmt::Debug {
+	fn to_usize(self) -> usize;
+	fn try_from_usize(index: usize) -> Result<Self, TypedIndexMapError<Self>>;
+	fn from_usize(index: usize) -> Self;
+}
+
+macro_rules! implement_primitive_typed_index_map_index_type {
+	($typ:ty) => {
+		impl TypedIndexMapIndexType for $typ {
+			fn to_usize(self) -> usize {
+				self as usize
+			}
+			fn try_from_usize(index: usize) -> Result<Self, TypedIndexMapError<Self>> {
+				if index <= Self::MAX as usize {
+					Ok(index as Self)
+				} else {
+					Err(TypedIndexMapError::TypedIndexMapFull(Self::MAX))
+				}
+			}
+			fn from_usize(index: usize) -> Self {
+				index as Self
+			}
+		}
+	};
+}
+
+implement_primitive_typed_index_map_index_type!(u8);
+implement_primitive_typed_index_map_index_type!(u16);
+implement_primitive_typed_index_map_index_type!(u32);
+implement_primitive_typed_index_map_index_type!(u64);
+implement_primitive_typed_index_map_index_type!(usize);
+
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
+pub struct TypedIndexMapIndex<T, IndexType: TypedIndexMapIndexType = usize>(
+	IndexType,
+	PhantomData<T>,
+);
+
+impl<T, I: TypedIndexMapIndexType> TypedIndexMapIndex<T, I> {
+	fn try_new(index: usize) -> Result<Self, TypedIndexMapError<I>> {
+		Ok(TypedIndexMapIndex(
+			I::try_from_usize(index)?,
+			Default::default(),
+		))
+	}
+
+	fn new(index: usize) -> Self {
+		TypedIndexMapIndex(I::from_usize(index), Default::default())
+	}
+
+	pub fn index(self) -> usize {
+		self.0.to_usize()
+	}
+}
+
+pub struct TypedIndexMap<T, K, V, IndexType: TypedIndexMapIndexType = usize, S = RandomState> {
+	index_map: IndexMap<K, V, S>,
+	_phantom: PhantomData<(T, IndexType)>,
+}
+
+impl<T, K: Clone, V: Clone, I: TypedIndexMapIndexType, S: Clone> Clone
+	for TypedIndexMap<T, K, V, I, S>
+{
 	#[inline]
 	fn clone(&self) -> Self {
 		TypedIndexMap {
@@ -35,10 +108,11 @@ impl<T, K: Clone, V: Clone, S: Clone> Clone for TypedIndexMap<T, K, V, S> {
 	}
 }
 
-impl<T, K, V, S> fmt::Debug for TypedIndexMap<T, K, V, S>
+impl<T, K, V, I, S> fmt::Debug for TypedIndexMap<T, K, V, I, S>
 where
 	K: fmt::Debug + Hash + Eq,
 	V: fmt::Debug,
+	I: TypedIndexMapIndexType,
 	S: BuildHasher,
 {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -46,7 +120,10 @@ where
 	}
 }
 
-impl<T, K, V> TypedIndexMap<T, K, V> {
+impl<T, K, V, I> TypedIndexMap<T, K, V, I>
+where
+	I: TypedIndexMapIndexType,
+{
 	/// Create a new map. (Does not allocate.)
 	#[inline]
 	pub fn new() -> Self {
@@ -63,7 +140,10 @@ impl<T, K, V> TypedIndexMap<T, K, V> {
 	}
 }
 
-impl<T, K, V, S> TypedIndexMap<T, K, V, S> {
+impl<T, K, V, I, S> TypedIndexMap<T, K, V, I, S>
+where
+	I: TypedIndexMapIndexType,
+{
 	/// Create a new map with capacity for `n` key-value pairs. (Does not
 	/// allocate if `n` is zero.)
 	///
@@ -120,10 +200,11 @@ impl<T, K, V, S> TypedIndexMap<T, K, V, S> {
 	}
 }
 
-impl<T, K, V, S> TypedIndexMap<T, K, V, S>
+impl<T, K, V, I, S> TypedIndexMap<T, K, V, I, S>
 where
 	K: Hash + Eq,
 	S: BuildHasher,
+	I: TypedIndexMapIndexType,
 {
 	/// Remove all key-value pairs in the map, while preserving its capacity.
 	///
@@ -163,8 +244,8 @@ where
 	/// See also [`entry`](#method.entry) if you you want to insert *or* modify
 	/// or if you need to get the index of the corresponding key-value pair.
 	#[inline]
-	pub fn insert(&mut self, key: K, value: V) -> Option<V> {
-		self.insert_full(key, value).1
+	pub fn insert(&mut self, key: K, value: V) -> Result<Option<V>, TypedIndexMapError<I>> {
+		Ok(self.insert_full(key, value)?.1)
 	}
 
 	/// Insert a key-value pair in the map, and get their index.
@@ -181,9 +262,13 @@ where
 	/// See also [`entry`](#method.entry) if you you want to insert *or* modify
 	/// or if you need to get the index of the corresponding key-value pair.
 	#[inline]
-	pub fn insert_full(&mut self, key: K, value: V) -> (TypedIndexMapIndex<T>, Option<V>) {
+	pub fn insert_full(
+		&mut self,
+		key: K,
+		value: V,
+	) -> Result<(TypedIndexMapIndex<T, I>, Option<V>), TypedIndexMapError<I>> {
 		let (idx, res) = self.index_map.insert_full(key, value);
-		(TypedIndexMapIndex(idx, Default::default()), res)
+		Ok((TypedIndexMapIndex::try_new(idx)?, res))
 	}
 
 	/// Get the given key’s corresponding entry in the map for insertion and/or
@@ -263,24 +348,24 @@ where
 
 	/// Return item index, key and value
 	#[inline]
-	pub fn get_full<Q: ?Sized>(&self, key: &Q) -> Option<(TypedIndexMapIndex<T>, &K, &V)>
+	pub fn get_full<Q: ?Sized>(&self, key: &Q) -> Option<(TypedIndexMapIndex<T, I>, &K, &V)>
 	where
 		Q: Hash + Equivalent<K>,
 	{
 		self.index_map
 			.get_full(key)
-			.map(|(idx, k, v)| (TypedIndexMapIndex(idx, Default::default()), k, v))
+			.map(|(idx, k, v)| (TypedIndexMapIndex::new(idx), k, v))
 	}
 
 	/// Return item index, if it exists in the map
 	#[inline]
-	pub fn get_index_of<Q: ?Sized>(&self, key: &Q) -> Option<TypedIndexMapIndex<T>>
+	pub fn get_index_of<Q: ?Sized>(&self, key: &Q) -> Option<TypedIndexMapIndex<T, I>>
 	where
 		Q: Hash + Equivalent<K>,
 	{
 		self.index_map
 			.get_index_of(key)
-			.map(|idx| TypedIndexMapIndex(idx, Default::default()))
+			.map(TypedIndexMapIndex::new)
 	}
 
 	#[inline]
@@ -295,13 +380,13 @@ where
 	pub fn get_full_mut<Q: ?Sized>(
 		&mut self,
 		key: &Q,
-	) -> Option<(TypedIndexMapIndex<T>, &K, &mut V)>
+	) -> Option<(TypedIndexMapIndex<T, I>, &K, &mut V)>
 	where
 		Q: Hash + Equivalent<K>,
 	{
 		self.index_map
 			.get_full_mut(key)
-			.map(|(idx, k, v)| (TypedIndexMapIndex(idx, Default::default()), k, v))
+			.map(|(idx, k, v)| (TypedIndexMapIndex::new(idx), k, v))
 	}
 
 	/// Remove the key-value pair equivalent to `key` and return
@@ -381,13 +466,16 @@ where
 	///
 	/// Computes in **O(1)** time (average).
 	#[inline]
-	pub fn swap_remove_full<Q: ?Sized>(&mut self, key: &Q) -> Option<(TypedIndexMapIndex<T>, K, V)>
+	pub fn swap_remove_full<Q: ?Sized>(
+		&mut self,
+		key: &Q,
+	) -> Option<(TypedIndexMapIndex<T, I>, K, V)>
 	where
 		Q: Hash + Equivalent<K>,
 	{
 		self.index_map
 			.swap_remove_full(key)
-			.map(|(idx, k, v)| (TypedIndexMapIndex(idx, Default::default()), k, v))
+			.map(|(idx, k, v)| (TypedIndexMapIndex::new(idx), k, v))
 	}
 
 	/// Remove the key-value pair equivalent to `key` and return
@@ -436,13 +524,16 @@ where
 	///
 	/// Computes in **O(n)** time (average).
 	#[inline]
-	pub fn shift_remove_full<Q: ?Sized>(&mut self, key: &Q) -> Option<(TypedIndexMapIndex<T>, K, V)>
+	pub fn shift_remove_full<Q: ?Sized>(
+		&mut self,
+		key: &Q,
+	) -> Option<(TypedIndexMapIndex<T, I>, K, V)>
 	where
 		Q: Hash + Equivalent<K>,
 	{
 		self.index_map
 			.shift_remove_full(key)
-			.map(|(idx, k, v)| (TypedIndexMapIndex(idx, Default::default()), k, v))
+			.map(|(idx, k, v)| (TypedIndexMapIndex::new(idx), k, v))
 	}
 
 	/// Remove the last key-value pair
@@ -523,15 +614,18 @@ where
 	}
 }
 
-impl<T, K, V, S> TypedIndexMap<T, K, V, S> {
+impl<T, K, V, I, S> TypedIndexMap<T, K, V, I, S>
+where
+	I: TypedIndexMapIndexType,
+{
 	/// Get a key-value pair by index
 	///
 	/// Valid indices are *0 <= index < self.len()*
 	///
 	/// Computes in **O(1)** time.
 	#[inline]
-	pub fn get_index(&self, index: TypedIndexMapIndex<T>) -> Option<(&K, &V)> {
-		self.index_map.get_index(index.0)
+	pub fn get_index(&self, index: TypedIndexMapIndex<T, I>) -> Option<(&K, &V)> {
+		self.index_map.get_index(index.index())
 	}
 
 	/// Get a key-value pair by index
@@ -540,8 +634,8 @@ impl<T, K, V, S> TypedIndexMap<T, K, V, S> {
 	///
 	/// Computes in **O(1)** time.
 	#[inline]
-	pub fn get_index_mut(&mut self, index: TypedIndexMapIndex<T>) -> Option<(&mut K, &mut V)> {
-		self.index_map.get_index_mut(index.0)
+	pub fn get_index_mut(&mut self, index: TypedIndexMapIndex<T, I>) -> Option<(&mut K, &mut V)> {
+		self.index_map.get_index_mut(index.index())
 	}
 
 	/// Remove the key-value pair by index
@@ -554,8 +648,8 @@ impl<T, K, V, S> TypedIndexMap<T, K, V, S> {
 	///
 	/// Computes in **O(1)** time (average).
 	#[inline]
-	pub fn swap_remove_index(&mut self, index: TypedIndexMapIndex<T>) -> Option<(K, V)> {
-		self.index_map.swap_remove_index(index.0)
+	pub fn swap_remove_index(&mut self, index: TypedIndexMapIndex<T, I>) -> Option<(K, V)> {
+		self.index_map.swap_remove_index(index.index())
 	}
 
 	/// Remove the key-value pair by index
@@ -568,7 +662,7 @@ impl<T, K, V, S> TypedIndexMap<T, K, V, S> {
 	///
 	/// Computes in **O(n)** time (average).
 	#[inline]
-	pub fn shift_remove_index(&mut self, index: TypedIndexMapIndex<T>) -> Option<(K, V)> {
-		self.index_map.shift_remove_index(index.0)
+	pub fn shift_remove_index(&mut self, index: TypedIndexMapIndex<T, I>) -> Option<(K, V)> {
+		self.index_map.shift_remove_index(index.index())
 	}
 }

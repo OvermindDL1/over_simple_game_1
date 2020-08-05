@@ -1,15 +1,16 @@
-mod atlas;
-
+use std::collections::HashMap;
 use std::convert::Infallible;
 use std::fmt;
 use std::path::PathBuf;
+use std::time::Instant;
 
 use anyhow::Context as AnyContext;
+use ggez::{Context, ContextBuilder, GameError, graphics};
 use ggez::conf::{FullscreenType, NumSamples, WindowMode, WindowSetup};
-use ggez::graphics::{Color, DrawMode, DrawParam, Drawable, FilterMode, Rect, Vertex};
+use ggez::graphics::{Color, Drawable, DrawMode, DrawParam, FilterMode, Rect, Vertex};
+use ggez::graphics::spritebatch::SpriteBatch;
 use ggez::input::{keyboard, mouse};
 use ggez::nalgebra as na;
-use ggez::{graphics, Context, ContextBuilder, GameError};
 use log::*;
 use serde::{Deserialize, Serialize};
 use shipyard::*;
@@ -18,15 +19,15 @@ use winit::{
 	VirtualKeyCode, WindowEvent,
 };
 
-use crate::game::atlas::{AtlasId, MultiAtlas, MultiAtlasBuilder};
-use crate::game::components::DrawSprite;
-use ggez::graphics::spritebatch::SpriteBatch;
 use over_simple_game_1::core::map::coord::{CoordOrientationNeighborIterator, MapCoord};
 use over_simple_game_1::core::map::generator::SimpleAlternationMapGenerator;
 use over_simple_game_1::games::civ::CivGame;
 use over_simple_game_1::prelude::*;
-use std::collections::HashMap;
-use std::time::Instant;
+
+use crate::game::atlas::{AtlasId, MultiAtlas, MultiAtlasBuilder};
+use crate::game::components::DrawSprite;
+
+mod atlas;
 
 mod components;
 
@@ -852,8 +853,7 @@ impl GameState {
 		let (center_x, center_y) = center.to_linear();
 		for (co, tile) in tile_map.iter_neighbors_around(center, radius) {
 			for &entity in &tile.entities {
-				if draw_sprites.contains(entity) {
-					let draw = &draw_sprites[entity];
+				if let Ok(draw) = draw_sprites.get(entity) {
 					if let Some(sprite) = self.entity_atlas.get_entry_by_name(&draw.sprite_name) {
 						let (opx, opy) = co.to_linear();
 						let px = center_x + opx;

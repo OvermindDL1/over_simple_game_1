@@ -1,11 +1,10 @@
+use thiserror::*;
+
 use crate::core::map::coord::{
 	Coord, CoordOrientation, CoordOrientationNeighborIterator, MapCoord,
 };
 use crate::core::map::generator::MapGenerator;
 use crate::core::map::tile::Tile;
-use serde::export::PhantomData;
-use shipyard::EntityId;
-use thiserror::*;
 
 #[derive(Error, Debug)]
 pub enum TileMapError

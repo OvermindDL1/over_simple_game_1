@@ -1,9 +1,11 @@
-use crate::core::engine::io::EngineIO;
-use crate::core::structures::typed_index_map::TypedIndexMap;
+use std::collections::HashSet;
+
 use serde::{Deserialize, Serialize};
 use shipyard::EntityId;
-use std::collections::HashSet;
 use thiserror::*;
+
+use crate::core::engine::io::EngineIO;
+use crate::core::structures::typed_index_map::TypedIndexMap;
 
 pub type TileIdx = u16;
 
