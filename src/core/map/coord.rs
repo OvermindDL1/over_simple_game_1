@@ -511,11 +511,9 @@ mod coord_tests {
 
 	#[test]
 	fn coord_orientation_neighbor_iterator_small_count() {
-		{
-			let mut iter = CoordOrientationNeighborIterator::new(0);
-			assert_eq!(iter.next(), Some(CoordOrientation::new_axial(0, 0)));
-			assert_eq!(iter.next(), None);
-		}
+		let mut iter = CoordOrientationNeighborIterator::new(0);
+		assert_eq!(iter.next(), Some(CoordOrientation::new_axial(0, 0)));
+		assert_eq!(iter.next(), None);
 	}
 
 	proptest!(
