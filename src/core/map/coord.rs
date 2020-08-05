@@ -20,40 +20,26 @@ use std::ops::{Add, Neg, Sub};
 /// assert_eq!(coord.r(), 1);
 /// ```
 #[derive(Clone, Copy, Default, Debug, Hash, PartialOrd, PartialEq, Ord, Eq)]
-pub struct Coord(i8, i8);
+pub struct Coord(u8, u8);
 
 impl Coord {
 	/// Uses axial coordinates to create a new `Coord`
 	///
 	/// Axial coordinate, 0,0 is top-left, 255,255 is bottom-right.
 	///
+	/// In Cubic then `q` is `x` and `r` is `z`, `y` is generated via `-q-r`.
+	///
 	/// ```
 	/// let coord = over_simple_game_1::core::map::coord::Coord::new_axial(0, 1);
 	/// assert_eq!(coord.q(), 0);
 	/// assert_eq!(coord.r(), 1);
 	/// ```
-	pub fn new_axial(q: i8, r: i8) -> Coord {
+	pub fn new_axial(q: u8, r: u8) -> Coord {
 		Coord(q, r)
 	}
 
-	/// Uses cubic coordinates to create a new `Coord`
-	///
-	/// cubic coordinates are the 3 axis of a 3d Cube, though constrained to the diagonal plane as
-	/// `x + y + z = 0`.
-	///
-	/// ```
-	/// let coord = over_simple_game_1::core::map::coord::Coord::new_axial(0, 1);
-	/// assert_eq!(coord.x(), 0);
-	/// assert_eq!(coord.y(), -1);
-	/// assert_eq!(coord.z(), 1);
-	/// ```
-	pub fn new_cubic(x: i8, y: i8, z: i8) -> Coord {
-		assert_eq!(x.wrapping_add(y).wrapping_add(z), 0);
-		Coord(x, z)
-	}
-
-	pub const CENTER_TO_POINT: f32 = 0.5773502691896258; //0.5/(TAU/12.0).cos(); // `cos` is not const capable for some reason...;
-	const SQRT3: f32 = 1.732050807568877; //3.0f32.sqrt(); // `sqrt` is not const capable either, why?!
+	pub const CENTER_TO_POINT: f32 = 0.57735026; // 0.5773502691896258; //0.5/(TAU/12.0).cos(); // `cos` is not const capable for some reason...;
+	const SQRT3: f32 = 1.7320508; // 1.732050807568877; //3.0f32.sqrt(); // `sqrt` is not const capable either, why?!
 
 	/// Uses linear (pixel) coordinate to create a new `Coord`
 	///
@@ -66,9 +52,9 @@ impl Coord {
 	/// assert_eq!(Coord::from_linear(1.0, 0.0), Coord::new_axial(1, 0));
 	/// assert_eq!(Coord::from_linear(0.5, 1.0), Coord::new_axial(0, 1));
 	/// assert_eq!(Coord::from_linear(1.5, 1.0), Coord::new_axial(1, 1));
-	/// assert_eq!(Coord::from_linear(-1.0, 0.0), Coord::new_axial(-1, 0));
-	/// assert_eq!(Coord::from_linear(-0.5, -1.0), Coord::new_axial(0, -1));
-	/// assert_eq!(Coord::from_linear(-1.5, -1.0), Coord::new_axial(-1, -1));
+	/// assert_eq!(Coord::from_linear(-1.0, 0.0), Coord::new_axial(255, 0));
+	/// assert_eq!(Coord::from_linear(-0.5, -1.0), Coord::new_axial(0, 255));
+	/// assert_eq!(Coord::from_linear(-1.5, -1.0), Coord::new_axial(255, 255));
 	/// let (x, y) = Coord::to_linear(Coord::new_axial(7, 28));
 	/// assert_eq!(Coord::from_linear(x, y), Coord::new_axial(7, 28));
 	/// ```
@@ -77,7 +63,7 @@ impl Coord {
 		let segment = (x + s3 * y + 1.0).floor();
 		let q = (((2.0 * x + 1.0).floor() + segment) / 3.0).floor();
 		let r = ((segment + (-x + s3 * y + 1.0).floor()) / 3.0).floor();
-		Coord::new_axial((q - r) as i8, r as i8)
+		Coord::new_axial((q - r) as i16 as u8, r as i16 as u8)
 	}
 
 	/// Get this hex coordinate in linear space where the point is centered on the hex coordinate.
@@ -106,52 +92,76 @@ impl Coord {
 		(x, y)
 	}
 
-	pub fn q(&self) -> i8 {
+	pub fn q(&self) -> u8 {
 		self.0
 	}
 
-	pub fn r(&self) -> i8 {
+	pub fn r(&self) -> u8 {
 		self.1
 	}
 
-	pub fn to_axial_tuple(&self) -> (i8, i8) {
+	pub fn to_axial_tuple(&self) -> (u8, u8) {
 		(self.q(), self.r())
 	}
 
-	pub fn x(&self) -> i8 {
-		self.0
+	pub fn x(&self) -> i16 {
+		self.0 as i16
 	}
 
-	pub fn y(&self) -> i8 {
-		self.0.wrapping_neg().wrapping_sub(self.1)
+	pub fn y(&self) -> i16 {
+		self.x().wrapping_neg().wrapping_sub(self.z())
 	}
 
-	pub fn z(&self) -> i8 {
-		self.1
+	pub fn z(&self) -> i16 {
+		self.1 as i16
 	}
 
-	pub fn to_cubic_tuple(&self) -> (i8, i8, i8) {
+	pub fn to_cubic_tuple(&self) -> (i16, i16, i16) {
 		(self.x(), self.y(), self.z())
 	}
 
 	pub fn idx(self, max_x: u8, max_z: u8, wraps_x: bool) -> Option<usize> {
-		if self.1 as u8 > max_z || (!wraps_x && self.0 as u8 > max_x) {
+		if self.1 > max_z || (!wraps_x && self.0 > max_x) {
 			return None;
 		}
 		let x = (self.0 as u8) as usize % (max_x as usize + 1);
 		let z = (self.1 as u8) as usize;
-		Some((z * max_x as usize) + x)
+		Some((z * (max_x as usize + 1)) + x)
 	}
 
-	pub fn as_coord_orientation(self) -> CoordOrientation {
-		CoordOrientation(self.0, self.1)
+	pub fn offset_by(
+		self,
+		offset: CoordOrientation,
+		width: u8,
+		height: u8,
+		wraps_x: bool,
+	) -> Option<Coord> {
+		let width = width as isize + 1;
+		let height = height as isize + 1;
+		let mut q = self.0 as isize + offset.0 as isize;
+		let r = self.1 as isize + offset.1 as isize;
+		if r < 0 || r > height {
+			return None;
+		}
+		let r = r as u8;
+		if wraps_x {
+			q = q.rem_euclid(width);
+		} else if q < 0 || q > width {
+			return None;
+		}
+		let q = q as u8;
+		Some(Coord::new_axial(q, r))
 	}
 
-	pub fn iter_neighbors_ring(self, distance: i8) -> CoordRingIterator {
+	// pub fn as_coord_orientation(self) -> CoordOrientation {
+	// 	CoordOrientation(self.0, self.1)
+	// }
+
+	pub fn iter_neighbors_ring(self, distance: u8) -> CoordRingIterator {
 		CoordRingIterator::new(self, distance)
 	}
 
-	pub fn iter_neighbors(self, distance: i8) -> CoordNeighborIterator {
+	pub fn iter_neighbors(self, distance: u8) -> CoordNeighborIterator {
 		CoordNeighborIterator::new(self, distance)
 	}
 }
@@ -160,7 +170,10 @@ impl Add<CoordOrientation> for Coord {
 	type Output = Coord;
 
 	fn add(self, rhs: CoordOrientation) -> Self::Output {
-		Coord(self.0.wrapping_add(rhs.0), self.1.wrapping_add(rhs.1))
+		Coord(
+			(self.0 as i8).wrapping_add(rhs.0) as u8,
+			(self.1 as i8).wrapping_add(rhs.1) as u8,
+		)
 	}
 }
 
@@ -168,7 +181,10 @@ impl Sub<CoordOrientation> for Coord {
 	type Output = Coord;
 
 	fn sub(self, rhs: CoordOrientation) -> Self::Output {
-		Coord(self.0.wrapping_sub(rhs.0), self.1.wrapping_sub(rhs.1))
+		Coord(
+			(self.0 as i8).wrapping_sub(rhs.0) as u8,
+			(self.1 as i8).wrapping_sub(rhs.1) as u8,
+		)
 	}
 }
 
@@ -176,34 +192,23 @@ impl Sub<Coord> for Coord {
 	type Output = CoordOrientation;
 
 	fn sub(self, rhs: Coord) -> Self::Output {
-		CoordOrientation(self.0.wrapping_sub(rhs.0), self.1.wrapping_sub(rhs.1))
+		CoordOrientation(
+			self.0.wrapping_sub(rhs.0) as i8,
+			self.1.wrapping_sub(rhs.1) as i8,
+		)
 	}
 }
 
 pub struct CoordRingIterator {
-	point: Option<Coord>,
-	side: CoordOrientation,
-	distance: i8,
-	offset: i8,
+	center: Coord,
+	offset: CoordOrientationRingIterator,
 }
 
 impl CoordRingIterator {
-	fn new(center: Coord, distance: i8) -> CoordRingIterator {
-		if distance == 0 {
-			CoordRingIterator {
-				point: Some(center),
-				side: CoordOrientation(-1, 1).ccw(),
-				distance: 0,
-				offset: 0,
-			}
-		} else {
-			let side = CoordOrientation(1, 0);
-			CoordRingIterator {
-				point: Some(center + side.scale(distance)),
-				side: (-side).ccw(),
-				distance,
-				offset: 0,
-			}
+	fn new(center: Coord, distance: u8) -> CoordRingIterator {
+		CoordRingIterator {
+			center,
+			offset: CoordOrientationRingIterator::new(distance),
 		}
 	}
 }
@@ -212,34 +217,21 @@ impl Iterator for CoordRingIterator {
 	type Item = Coord;
 
 	fn next(&mut self) -> Option<Self::Item> {
-		let point = self.point? + self.side.scale(self.offset);
-		if self.offset >= self.distance {
-			self.offset = 1;
-			self.side = self.side.cw();
-			if self.side == CoordOrientation(-1, 1) {
-				self.point = None;
-			} else {
-				self.point = Some(point)
-			}
-		} else {
-			self.offset += 1;
-		}
-		Some(point)
+		let offset = self.offset.next()?;
+		Some(self.center + offset)
 	}
 }
 
 pub struct CoordNeighborIterator {
-	ring_iter: CoordRingIterator,
 	center: Coord,
-	distance: i8,
+	offset: CoordOrientationNeighborIterator,
 }
 
 impl CoordNeighborIterator {
-	fn new(center: Coord, distance: i8) -> CoordNeighborIterator {
+	fn new(center: Coord, distance: u8) -> CoordNeighborIterator {
 		CoordNeighborIterator {
-			ring_iter: CoordRingIterator::new(center, 0),
 			center,
-			distance,
+			offset: CoordOrientationNeighborIterator::new(distance),
 		}
 	}
 }
@@ -248,14 +240,8 @@ impl Iterator for CoordNeighborIterator {
 	type Item = Coord;
 
 	fn next(&mut self) -> Option<Self::Item> {
-		if let Some(coord) = self.ring_iter.next() {
-			return Some(coord);
-		}
-		if self.distance <= self.ring_iter.distance {
-			return None;
-		}
-		self.ring_iter = CoordRingIterator::new(self.center, self.ring_iter.distance + 1);
-		self.ring_iter.next()
+		let offset = self.offset.next()?;
+		Some(self.center + offset)
 	}
 }
 
@@ -276,22 +262,6 @@ impl CoordOrientation {
 		CoordOrientation(q, r)
 	}
 
-	/// Uses cubic coordinates to create a new `CoordOrientation`
-	///
-	/// cubic coordinates are the 3 axis of a 3d Cube, though constrained to the diagonal plane as
-	/// `x + y + z = 0`.
-	///
-	/// ```
-	/// let coord = over_simple_game_1::core::map::coord::Coord::new_axial(0, 1);
-	/// assert_eq!(coord.x(), 0);
-	/// assert_eq!(coord.y(), -1);
-	/// assert_eq!(coord.z(), 1);
-	/// ```
-	pub fn new_cubic(x: i8, y: i8, z: i8) -> CoordOrientation {
-		assert_eq!(x.wrapping_add(y).wrapping_add(z), 0);
-		CoordOrientation(x, z)
-	}
-
 	pub fn q(&self) -> i8 {
 		self.0
 	}
@@ -320,22 +290,40 @@ impl CoordOrientation {
 		(self.x(), self.y(), self.z())
 	}
 
+	pub fn to_linear(self) -> (f32, f32) {
+		let q = self.0 as f32;
+		let r = self.1 as f32;
+		let x = Coord::CENTER_TO_POINT * (Coord::SQRT3 * q + Coord::SQRT3 / 2.0 * r);
+		let y = Coord::CENTER_TO_POINT * (3.0 / 2.0 * r);
+		(x, y)
+	}
+
 	pub fn scale(self, scale: i8) -> CoordOrientation {
 		CoordOrientation(self.0.wrapping_mul(scale), self.1.wrapping_mul(scale))
 	}
 
 	pub fn cw(self) -> CoordOrientation {
-		let (x, y, z) = (-self).to_cubic_tuple();
-		CoordOrientation::new_cubic(z, x, y)
+		let (_x, y, z) = (-self).to_cubic_tuple();
+		// CoordOrientation::new_cubic(z, x, y)
+		CoordOrientation::new_axial(z, y)
 	}
 
 	pub fn ccw(self) -> CoordOrientation {
-		let (x, y, z) = (-self).to_cubic_tuple();
-		CoordOrientation::new_cubic(y, z, x)
+		let (x, y, _z) = (-self).to_cubic_tuple();
+		// CoordOrientation::new_cubic(y, z, x)
+		CoordOrientation::new_axial(y, x)
 	}
 
-	pub fn as_coord(self) -> Coord {
-		Coord(self.0, self.1)
+	// pub fn as_coord(self) -> Coord {
+	// 	Coord(self.0, self.1)
+	// }
+
+	pub fn iter_neighbors_ring(distance: u8) -> CoordOrientationRingIterator {
+		CoordOrientationRingIterator::new(distance)
+	}
+
+	pub fn iter_neighbors(distance: u8) -> CoordOrientationNeighborIterator {
+		CoordOrientationNeighborIterator::new(distance)
 	}
 }
 
@@ -359,7 +347,10 @@ impl Add<Coord> for CoordOrientation {
 	type Output = Coord;
 
 	fn add(self, rhs: Coord) -> Self::Output {
-		Coord(self.0.wrapping_add(rhs.0), self.1.wrapping_add(rhs.1))
+		Coord(
+			(self.0 as u8).wrapping_add(rhs.0),
+			(self.1 as u8).wrapping_add(rhs.1),
+		)
 	}
 }
 
@@ -367,7 +358,10 @@ impl Sub<Coord> for CoordOrientation {
 	type Output = Coord;
 
 	fn sub(self, rhs: Coord) -> Self::Output {
-		Coord(self.0.wrapping_sub(rhs.0), self.1.wrapping_sub(rhs.1))
+		Coord(
+			(self.0 as u8).wrapping_sub(rhs.0),
+			(self.1 as u8).wrapping_sub(rhs.1),
+		)
 	}
 }
 
@@ -376,6 +370,82 @@ impl Neg for CoordOrientation {
 
 	fn neg(self) -> Self::Output {
 		CoordOrientation(self.0.wrapping_neg(), self.1.wrapping_neg())
+	}
+}
+
+pub struct CoordOrientationRingIterator {
+	side: CoordOrientation,
+	side_count: u8,
+	distance: u8,
+	offset: u8,
+}
+
+impl CoordOrientationRingIterator {
+	pub fn new(distance: u8) -> CoordOrientationRingIterator {
+		assert!(distance <= 127);
+		if distance == 0 {
+			CoordOrientationRingIterator {
+				side_count: 5,
+				side: CoordOrientation(0, 0),
+				distance: 0,
+				offset: 0,
+			}
+		} else {
+			CoordOrientationRingIterator {
+				side_count: 0,
+				side: CoordOrientation(1, 0),
+				distance,
+				offset: 0,
+			}
+		}
+	}
+}
+
+impl Iterator for CoordOrientationRingIterator {
+	type Item = CoordOrientation;
+
+	fn next(&mut self) -> Option<Self::Item> {
+		if self.side_count > 5 {
+			return None;
+		}
+		let side = self.side.scale(self.distance as i8);
+		let offset = (-self.side).ccw().scale(self.offset as i8);
+		self.offset += 1;
+		if self.offset >= self.distance {
+			self.offset = 0;
+			self.side = self.side.cw();
+			self.side_count += 1;
+		}
+		Some(side + offset)
+	}
+}
+
+pub struct CoordOrientationNeighborIterator {
+	ring_iter: CoordOrientationRingIterator,
+	distance: u8,
+}
+
+impl CoordOrientationNeighborIterator {
+	pub fn new(distance: u8) -> CoordOrientationNeighborIterator {
+		CoordOrientationNeighborIterator {
+			ring_iter: CoordOrientationRingIterator::new(0),
+			distance,
+		}
+	}
+}
+
+impl Iterator for CoordOrientationNeighborIterator {
+	type Item = CoordOrientation;
+
+	fn next(&mut self) -> Option<Self::Item> {
+		if let Some(coord) = self.ring_iter.next() {
+			return Some(coord);
+		}
+		if self.distance <= self.ring_iter.distance {
+			return None;
+		}
+		self.ring_iter = CoordOrientationRingIterator::new(self.ring_iter.distance + 1);
+		self.ring_iter.next()
 	}
 }
 
@@ -389,9 +459,10 @@ pub struct MapCoord {
 mod coord_tests {
 	use super::*;
 	use proptest::prelude::*;
+	use std::collections::HashSet;
 
 	fn rand_coord_strategy() -> BoxedStrategy<Coord> {
-		(any::<i8>(), any::<i8>())
+		(any::<u8>(), any::<u8>())
 			.prop_map(|(q, r)| Coord::new_axial(q, r))
 			.boxed()
 	}
@@ -402,9 +473,65 @@ mod coord_tests {
 			.boxed()
 	}
 
+	#[test]
+	fn coord_orientation_ring_iterator_count() {
+		{
+			let mut iter = CoordOrientationRingIterator::new(0);
+			assert_eq!(iter.next(), Some(CoordOrientation::new_axial(0, 0)));
+			assert_eq!(iter.next(), None);
+		}
+		{
+			let mut iter = CoordOrientationRingIterator::new(1);
+			assert_eq!(iter.next(), Some(CoordOrientation::new_axial(1, 0)));
+			assert_eq!(iter.next(), Some(CoordOrientation::new_axial(0, 1)));
+			assert_eq!(iter.next(), Some(CoordOrientation::new_axial(-1, 1)));
+			assert_eq!(iter.next(), Some(CoordOrientation::new_axial(-1, 0)));
+			assert_eq!(iter.next(), Some(CoordOrientation::new_axial(0, -1)));
+			assert_eq!(iter.next(), Some(CoordOrientation::new_axial(1, -1)));
+			assert_eq!(iter.next(), None);
+		}
+		for distance in 1..5u8 {
+			let iter = CoordOrientationRingIterator::new(distance);
+			let mut around = HashSet::<CoordOrientation>::new();
+			for c in iter {
+				around.insert(c);
+			}
+			assert_eq!(
+				around.len(),
+				(distance as usize * 6),
+				"Distance {} missing/extra values, generated: {:?}",
+				distance,
+				around
+			);
+		}
+	}
+
+	#[test]
+	fn coord_orientation_neighbor_iterator_count() {
+		{
+			let mut iter = CoordOrientationNeighborIterator::new(0);
+			assert_eq!(iter.next(), Some(CoordOrientation::new_axial(0, 0)));
+			assert_eq!(iter.next(), None);
+		}
+		for distance in 1..5u8 {
+			let iter = CoordOrientationNeighborIterator::new(distance);
+			let mut around = HashSet::<CoordOrientation>::new();
+			for c in iter {
+				around.insert(c);
+			}
+			assert_eq!(
+				around.len(),
+				(1..=distance).fold(1, |acc, i| { acc + (i as usize * 6) }),
+				"Distance {} missing/extra values, generated: {:?}",
+				distance,
+				around
+			);
+		}
+	}
+
 	proptest!(
 		#[test]
-		fn coord_to_linear_from_linear(q: i8, r: i8) {
+		fn coord_to_linear_from_linear(q: u8, r: u8) {
 			let axial = Coord::new_axial(q, r);
 
 			let (x, y) = axial.to_linear();
