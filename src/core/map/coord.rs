@@ -151,6 +151,10 @@ impl Coord {
 		Some(Coord::new_axial(q, r))
 	}
 
+    pub fn distance_to(other: &Coord) -> u8 {
+        unimplemented!()
+    }
+
 	// pub fn as_coord_orientation(self) -> CoordOrientation {
 	// 	CoordOrientation(self.0, self.1)
 	// }
@@ -523,6 +527,16 @@ mod coord_tests {
 			);
 		}
 	);
+
+    proptest!(
+        #[test]
+        fn coord_iterator_should_give_equal_dists(
+            coord in rand_coord_strategy(),
+            distance in 1..128u8
+        ) {
+            unimplemented!();
+        }
+    );
 
 	proptest!(
 		#[test]
