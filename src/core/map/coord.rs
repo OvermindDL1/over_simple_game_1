@@ -304,6 +304,14 @@ impl CoordOrientation {
 		(x, y)
 	}
 
+	pub fn distance_to(self, other: CoordOrientation) -> u8 {
+		let (dx, dy, dz) = (self - other).to_cubic_tuple();
+		std::cmp::max(
+			std::cmp::max(dx.abs() as u8, dy.abs() as u8),
+			dz.abs() as u8,
+		)
+	}
+
 	pub fn scale(self, scale: i8) -> CoordOrientation {
 		CoordOrientation(self.0.wrapping_mul(scale), self.1.wrapping_mul(scale))
 	}
