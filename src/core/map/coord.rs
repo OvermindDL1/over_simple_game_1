@@ -151,7 +151,7 @@ impl Coord {
 		Some(Coord::new_axial(q, r))
 	}
 
-    pub fn distance_to(other: &Coord) -> u8 {
+    pub fn distance_to(self, other: Coord) -> u8 {
         unimplemented!()
     }
 
@@ -534,7 +534,9 @@ mod coord_tests {
             coord in rand_coord_strategy(),
             distance in 1..128u8
         ) {
-            unimplemented!();
+            for i in coord.iter_neighbors_ring(distance) {
+                prop_assert_eq!(coord.distance_to(i), distance);
+            }
         }
     );
 
