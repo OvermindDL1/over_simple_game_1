@@ -87,11 +87,7 @@ impl<IO: EngineIO> TileTypes<IO> {
 		}
 	}
 
-	fn add_tile(
-		&mut self,
-		io: &mut IO,
-		mut tile_type: TileType<IO>,
-	) -> Result<(), TileTypesError<IO>> {
+	fn add_tile(&mut self, io: &mut IO, tile_type: TileType<IO>) -> Result<(), TileTypesError<IO>> {
 		if tile_type.name.is_empty() {
 			return Err(TileTypesError::InvalidTileTypeData(
 				"name is empty".into(),
