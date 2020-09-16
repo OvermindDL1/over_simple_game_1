@@ -237,6 +237,15 @@ mod tile_tests {
 		}
 	}
 
+	impl std::clone::Clone for TileType<DummyIO> {
+		fn clone(&self) -> Self {
+			TileType {
+				name: self.name.clone(),
+				interface: self.interface,
+			}
+		}
+	}
+
 	fn tiletype_strategy_generator(regex: &str) -> BoxedStrategy<TileType<DummyIO>> {
 		prop::string::string_regex(regex)
 			.expect("failed to generate strategy from regex")
@@ -278,6 +287,19 @@ mod tile_tests {
 	);
 
 	proptest!(
+		#[test]
+		fn duplicate_tiletype_gets_rejected(tt in non_empty_tiletype_strategy()) {
+			let mut dummy_io = DummyIO::default();
+			let tt_copy = tt.clone();
+			let mut tts = TileTypes::new();
+
+			tts.add_tile(&mut dummy_io, tt)?;
+			if let Err(TileTypesError::DuplicateTileTypeName(_)) = tts.add_tile(&mut dummy_io, tt_copy) {}
+			else { prop_assert!(false, "TileTypes accepted two identical tiles") }
+		}
+	);
+
+	proptest!(
 		#![proptest_config(ProptestConfig::with_cases(30))]
 		#[test]
 		fn many_valid_tiletypes_get_accepted(
@@ -287,7 +309,7 @@ mod tile_tests {
 			let mut dummy_io = DummyIO::default();
 			let mut tts = TileTypes::new();
 			for tt in tt_set {
-				// I would use prop_assert_ne!(add_tile, Ok(())) but it needs PartialEq
+				// I would use prop_assert_eq!(add_tile, Ok(())) but it needs PartialEq
 				if let Err(e) = tts.add_tile(&mut dummy_io, tt) {
 					prop_assert!(false, "{}", e);
 				}
