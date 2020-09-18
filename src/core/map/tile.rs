@@ -145,7 +145,7 @@ impl<IO: EngineIO> TileTypes<IO> {
 		)?;
 
 		let reader = io
-			.read("tiles/tile_types.ron".into())
+			.read(std::path::Path::new("tiles/tile_types.ron"))
 			.map_err(|source| TileTypesError::FileReadError { source })?;
 
 		let tile_types: Vec<TileType<IO>> = ron::de::from_reader(reader)
@@ -196,7 +196,7 @@ impl<IO: EngineIO> TileTypes<IO> {
 mod tile_tests {
 	use super::*;
 	use proptest::prelude::*;
-	use std::{convert::Infallible, hash::Hasher, path::PathBuf};
+	use std::{convert::Infallible, hash::Hasher, path::Path};
 
 	#[derive(Debug, Default, Eq, PartialEq)]
 	struct DummyIO {}
@@ -205,7 +205,7 @@ mod tile_tests {
 		type ReadError = Infallible;
 		type Read = &'static [u8];
 
-		fn read(&mut self, _: PathBuf) -> Result<Self::Read, Self::ReadError> {
+		fn read(&mut self, _: &Path) -> Result<Self::Read, Self::ReadError> {
 			Ok(b"")
 		}
 
