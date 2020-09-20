@@ -31,6 +31,8 @@ mod atlas;
 
 mod components;
 
+mod cli;
+
 #[derive(Clone, Copy, Debug)]
 enum MapAtlas {}
 
@@ -103,6 +105,7 @@ pub struct Game {
 	engine: Engine<GameState>,
 	civ: CivGame,
 	events_loop: ggez::event::EventsLoop,
+    cli_commands: std::sync::mpsc::Receiver<cli::CliCommand>,
 	// gamepad_enabled: bool,
 }
 
@@ -187,6 +190,7 @@ impl Game {
 		let ecs = shipyard::World::new();
 		let engine = Engine::new();
 		let civ = CivGame::new("/civ");
+        let (_, cli_commands) = cli::init_cli_thread();
 
 		Ok(Game {
 			state,
@@ -194,6 +198,7 @@ impl Game {
 			engine,
 			civ,
 			events_loop,
+            cli_commands,
 			// gamepad_enabled,
 		})
 	}
@@ -246,6 +251,9 @@ impl Game {
 	}
 
 	pub fn run_once(&mut self) -> anyhow::Result<()> {
+        while let Ok(cmd) = self.cli_commands.try_recv() {
+            self.state.apply_cli_command(cmd);
+        }
 		let state = &mut self.state;
 		let ecs = &mut self.ecs;
 		let events_loop = &mut self.events_loop;
@@ -749,6 +757,9 @@ impl GameState {
 		self.mouse_last_position = [screen_x, screen_y].into();
 		Ok(())
 	}
+
+    fn apply_cli_command(&mut self, command: cli::CliCommand) {
+    }
 
 	fn update(
 		&mut self,
