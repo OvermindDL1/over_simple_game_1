@@ -761,8 +761,9 @@ impl GameState {
 	fn apply_cli_command(&mut self, command: cli::CliCommand) {
 		use cli::CliCommand::*;
 		match command {
-			ZoomSet(v) => self.zoom = v,
-			ZoomChange(v) => self.zoom += v,
+			ZoomSet(v) => { self.zoom = v; self.screen_tiles = v; },
+			ZoomChange(v) => self.screen_tiles += v,
+            Clean => self.tiles_meshes.clear(),
 		}
 	}
 
