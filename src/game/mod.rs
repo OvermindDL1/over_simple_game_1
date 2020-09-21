@@ -761,7 +761,8 @@ impl GameState {
 	fn apply_cli_command(&mut self, command: cli::CliCommand) {
 		use cli::CliCommand::*;
 		match command {
-			Mississppi => info!("Conglaturations"),
+			ZoomSet(v) => self.zoom = v,
+            ZoomChange(v) => self.zoom += v,
 		}
 	}
 
