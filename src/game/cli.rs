@@ -8,7 +8,7 @@ use thiserror::*;
 pub enum CliCommand {
 	ZoomSet(f32),
 	ZoomChange(f32),
-    Clean,
+	Clean,
 }
 
 #[derive(Debug, Clone, Error)]
@@ -102,7 +102,7 @@ fn parse_definite_command<'a>(
 			},
 			otherwise => Err(CliParseError::UnknownCommand(otherwise.to_owned())),
 		},
-        "clean" => Ok(CliCommand::Clean),
+		"clean" => Ok(CliCommand::Clean),
 		unparsed_command => Err(CliParseError::UnknownCommand(unparsed_command.to_owned())),
 	}
 }
