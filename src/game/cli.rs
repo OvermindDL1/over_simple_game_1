@@ -1,9 +1,15 @@
-use std::io::{stdin, Read};
+use std::io::stdin;
 use std::{sync, thread};
 
 use log::*;
 
-pub enum CliCommand {}
+pub enum CliCommand {
+    Mississppi,
+}
+
+enum CliParseError<'a> {
+    UnknownCommand(&'a str)
+}
 
 // returns a JoinHandle but you probably shouldn't join on it because it
 // will block forever (or until it errors)
@@ -31,13 +37,24 @@ fn cli_thread(out: sync::mpsc::Sender<CliCommand>) -> anyhow::Result<()> {
 			input_buffer.read_line(&mut next_line)?;
 			next_line
 		};
+        let mut next_words = next_line.split(' ');
 
-		for word in next_line.split(' ') {
-			match word.trim() {
-				"mississippi" => info!("spelled correctly. conglaturations"),
-				"" => (),
-				_ => warn!("Could not understand command: {}", word),
-			}
-		}
+        while let Some(result) = parse_command(&mut next_words) {
+            match result {
+                Ok(c) => out.send(c)?,
+                Err(_) => (), // Do some stuff here later
+            }
+        }
 	}
+}
+
+fn parse_command<'a>(iter: &mut dyn Iterator<Item=&'a str>) -> Option<Result<CliCommand, CliParseError<'a>>> {
+    match iter.next() {
+        Some(s) => Some(match s.trim() {
+            "mississippi" => Ok(CliCommand::Mississppi),
+            "" => parse_command(iter)?,
+            unparsed_command => Err(CliParseError::UnknownCommand(unparsed_command)),
+        }),
+        None => None,
+    }
 }
