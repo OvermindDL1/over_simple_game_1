@@ -759,11 +759,11 @@ impl GameState {
 	}
 
 	fn apply_cli_command(&mut self, command: cli::CliCommand) {
-        use cli::CliCommand::*;
-        match command {
-            Mississppi => info!("Conglaturations"),
-        }
-    }
+		use cli::CliCommand::*;
+		match command {
+			Mississppi => info!("Conglaturations"),
+		}
+	}
 
 	fn update(
 		&mut self,
