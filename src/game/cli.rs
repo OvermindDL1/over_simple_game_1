@@ -6,20 +6,20 @@ use log::*;
 use thiserror::*;
 
 pub enum CliCommand {
-    ZoomSet(f32),
-    ZoomChange(f32),
+	ZoomSet(f32),
+	ZoomChange(f32),
 }
 
 #[derive(Debug, Clone, Error)]
 enum CliParseError {
-    #[error("Unable to parse command: {0}")]
+	#[error("Unable to parse command: {0}")]
 	UnknownCommand(String),
 
-    #[error("Unable to parse \"{0}\" as a number")]
-    NotANumber(String),
+	#[error("Unable to parse \"{0}\" as a number")]
+	NotANumber(String),
 
-    #[error("That command requires more arguments than given")]
-    NotEnoughArgs,
+	#[error("That command requires more arguments than given")]
+	NotEnoughArgs,
 }
 
 // returns a JoinHandle but you probably shouldn't join on it because it
@@ -64,46 +64,43 @@ fn parse_maybe_command<'a>(
 ) -> Option<Result<CliCommand, CliParseError>> {
 	match iter.next() {
 		Some(s) => match s.trim() {
-            "" => parse_maybe_command(iter),
-            otherwise => Some(parse_definite_command(otherwise.trim(), iter)),
-        }
+			"" => parse_maybe_command(iter),
+			otherwise => Some(parse_definite_command(otherwise.trim(), iter)),
+		},
 		None => None,
 	}
 }
 
-
 fn parse_definite_command<'a>(
-    command_str: &'a str,
+	command_str: &'a str,
 	iter: &mut dyn Iterator<Item = &'a str>,
 ) -> Result<CliCommand, CliParseError> {
+	macro_rules! next_arg {
+		() => {
+			iter.next().ok_or(CliParseError::NotEnoughArgs)?.trim()
+		};
+	}
 
-    macro_rules! next_arg {
-        () => { iter.next().ok_or(CliParseError::NotEnoughArgs)?.trim() };
-    }
+	macro_rules! parse_next_arg {
+		($T:ty) => {
+			next_arg!()
+				.parse::<f32>()
+				.map_err(|e| CliParseError::NotANumber(format!("{}", e)))
+		};
+	}
 
-    macro_rules! parse_next_arg {
-        ($T:ty) => {
-            next_arg!().parse::<f32>()
-                .map_err(|e| CliParseError::NotANumber(format!("{}", e)))
-        };
-    }
-
-    match command_str {
-        "zoom" => match next_arg!() {
-            "set" => {
-                match parse_next_arg!(f32) {
-                    Ok(n) => Ok(CliCommand::ZoomSet(n)),
-                    Err(e) => Err(e),
-                }
-            }
-            "change" => {
-                match parse_next_arg!(f32) {
-                    Ok(n) => Ok(CliCommand::ZoomChange(n)),
-                    Err(e) => Err(e),
-                }
-            }
-            otherwise => Err(CliParseError::UnknownCommand(otherwise.to_owned()))
-        }
-        unparsed_command => Err(CliParseError::UnknownCommand(unparsed_command.to_owned())),
-    }
+	match command_str {
+		"zoom" => match next_arg!() {
+			"set" => match parse_next_arg!(f32) {
+				Ok(n) => Ok(CliCommand::ZoomSet(n)),
+				Err(e) => Err(e),
+			},
+			"change" => match parse_next_arg!(f32) {
+				Ok(n) => Ok(CliCommand::ZoomChange(n)),
+				Err(e) => Err(e),
+			},
+			otherwise => Err(CliParseError::UnknownCommand(otherwise.to_owned())),
+		},
+		unparsed_command => Err(CliParseError::UnknownCommand(unparsed_command.to_owned())),
+	}
 }

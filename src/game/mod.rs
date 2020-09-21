@@ -762,7 +762,7 @@ impl GameState {
 		use cli::CliCommand::*;
 		match command {
 			ZoomSet(v) => self.zoom = v,
-            ZoomChange(v) => self.zoom += v,
+			ZoomChange(v) => self.zoom += v,
 		}
 	}
 
