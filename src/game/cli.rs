@@ -10,13 +10,13 @@ pub enum CliCommand {
     ZoomChange(f32),
 }
 
-#[derive(Debug, Copy, Clone, Error)]
-enum CliParseError<'a> {
+#[derive(Debug, Clone, Error)]
+enum CliParseError {
     #[error("Unable to parse command: {0}")]
-	UnknownCommand(&'a str),
+	UnknownCommand(String),
 
     #[error("Unable to parse \"{0}\" as a number")]
-    NotANumber(&'a str),
+    NotANumber(String),
 
     #[error("That command requires more arguments than given")]
     NotEnoughArgs,
@@ -61,7 +61,7 @@ fn cli_thread(out: sync::mpsc::Sender<CliCommand>) -> anyhow::Result<()> {
 
 fn parse_maybe_command<'a>(
 	iter: &mut dyn Iterator<Item = &'a str>,
-) -> Option<Result<CliCommand, CliParseError<'a>>> {
+) -> Option<Result<CliCommand, CliParseError>> {
 	match iter.next() {
 		Some(s) => match s.trim() {
             "" => parse_maybe_command(iter),
@@ -75,32 +75,35 @@ fn parse_maybe_command<'a>(
 fn parse_definite_command<'a>(
     command_str: &'a str,
 	iter: &mut dyn Iterator<Item = &'a str>,
-) -> Result<CliCommand, CliParseError<'a>> {
+) -> Result<CliCommand, CliParseError> {
 
     macro_rules! next_arg {
         () => { iter.next().ok_or(CliParseError::NotEnoughArgs)?.trim() };
     }
 
+    macro_rules! parse_next_arg {
+        ($T:ty) => {
+            next_arg!().parse::<f32>()
+                .map_err(|e| CliParseError::NotANumber(format!("{}", e)))
+        };
+    }
+
     match command_str {
         "zoom" => match next_arg!() {
             "set" => {
-                let n_str = next_arg!();
-                let n_num = n_str.parse::<f32>().map_err(|_| CliParseError::NotANumber(n_str));
-                match n_num {
+                match parse_next_arg!(f32) {
                     Ok(n) => Ok(CliCommand::ZoomSet(n)),
-                    Err(_) => Err(CliParseError::NotANumber(n_str)),
+                    Err(e) => Err(e),
                 }
             }
             "change" => {
-                let n_str = next_arg!();
-                let n_num = n_str.parse::<f32>().map_err(|_| CliParseError::NotANumber(n_str));
-                match n_num {
+                match parse_next_arg!(f32) {
                     Ok(n) => Ok(CliCommand::ZoomChange(n)),
-                    Err(_) => Err(CliParseError::NotANumber(n_str)),
+                    Err(e) => Err(e),
                 }
             }
-            otherwise => Err(CliParseError::UnknownCommand(otherwise))
+            otherwise => Err(CliParseError::UnknownCommand(otherwise.to_owned()))
         }
-        unparsed_command => Err(CliParseError::UnknownCommand(unparsed_command)),
+        unparsed_command => Err(CliParseError::UnknownCommand(unparsed_command.to_owned())),
     }
 }
