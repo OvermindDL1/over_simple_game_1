@@ -91,6 +91,14 @@ fn parse_definite_command<'a>(
                     Err(_) => Err(CliParseError::NotANumber(n_str)),
                 }
             }
+            "change" => {
+                let n_str = next_arg!();
+                let n_num = n_str.parse::<f32>().map_err(|_| CliParseError::NotANumber(n_str));
+                match n_num {
+                    Ok(n) => Ok(CliCommand::ZoomChange(n)),
+                    Err(_) => Err(CliParseError::NotANumber(n_str)),
+                }
+            }
             otherwise => Err(CliParseError::UnknownCommand(otherwise))
         }
         unparsed_command => Err(CliParseError::UnknownCommand(unparsed_command)),
