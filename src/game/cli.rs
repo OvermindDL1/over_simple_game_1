@@ -53,7 +53,7 @@ fn cli_thread(out: sync::mpsc::Sender<CliCommand>) -> anyhow::Result<()> {
 		while let Some(result) = parse_maybe_command(&mut next_words) {
 			match result {
 				Ok(c) => out.send(c)?,
-				Err(_) => (), // Do some stuff here later
+				Err(e) => error!("{}", e),
 			}
 		}
 	}
