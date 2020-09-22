@@ -89,14 +89,8 @@ fn parse_definite_command<'a>(
 
 	match command_str {
 		"zoom" => match next_arg!() {
-			"set" => match parse_next_arg!(f32) {
-				Ok(n) => Ok(CliCommand::ZoomSet(n)),
-				Err(e) => Err(e),
-			},
-			"change" => match parse_next_arg!(f32) {
-				Ok(n) => Ok(CliCommand::ZoomChange(n)),
-				Err(e) => Err(e),
-			},
+			"set" => Ok(CliCommand::ZoomSet(parse_next_arg!(f32)?)),
+			"change" => Ok(CliCommand::ZoomChange(parse_next_arg!(f32)?)),
 			otherwise => Err(CliParseError::UnknownCommand(otherwise.to_owned())),
 		},
 		"clean" => Ok(CliCommand::Clean),
