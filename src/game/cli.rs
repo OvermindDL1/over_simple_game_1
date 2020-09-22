@@ -16,7 +16,7 @@ enum CliParseError {
 	#[error("Unable to parse command: {0}")]
 	UnknownCommand(String),
 
-	#[error("Unable to parse \"{0}\" as a number")]
+	#[error("Unable to parse number: {0}")]
 	NotANumber(String),
 
 	#[error("That command requires more arguments than given")]
@@ -64,10 +64,7 @@ fn parse_maybe_command<'a>(
 	iter: &mut dyn Iterator<Item = &'a str>,
 ) -> Option<Result<CliCommand, CliParseError>> {
 	match iter.next() {
-		Some(s) => match s.trim() {
-			"" => parse_maybe_command(iter),
-			otherwise => Some(parse_definite_command(otherwise.trim(), iter)),
-		},
+		Some(s) => Some(parse_definite_command(s.trim(), iter)),
 		None => None,
 	}
 }
@@ -85,7 +82,7 @@ fn parse_definite_command<'a>(
 	macro_rules! parse_next_arg {
 		($T:ty) => {
 			next_arg!()
-				.parse::<f32>()
+				.parse::<$T>()
 				.map_err(|e| CliParseError::NotANumber(format!("{}", e)))
 		};
 	}
