@@ -49,7 +49,7 @@ fn cli_thread(out: sync::mpsc::Sender<CliCommand>) -> anyhow::Result<()> {
 			input_buffer.read_line(&mut next_line)?;
 			next_line
 		};
-		let mut next_words = next_line.split(' ');
+		let mut next_words = next_line.split(' ').filter(|s| *s != "");
 
 		while let Some(result) = parse_maybe_command(&mut next_words) {
 			match result {
