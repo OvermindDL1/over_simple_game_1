@@ -49,7 +49,7 @@ fn cli_thread(out: sync::mpsc::Sender<CliCommand>) -> anyhow::Result<()> {
 			input_buffer.read_line(&mut next_line)?;
 			next_line
 		};
-		let mut next_words = next_line.split(' ').filter(|s| *s != "");
+		let mut next_words = next_line.split(' ').map(|s| s.trim()).filter(|s| *s != "");
 
 		while let Some(result) = parse_maybe_command(&mut next_words) {
 			match result {
@@ -64,7 +64,7 @@ fn parse_maybe_command<'a>(
 	iter: &mut dyn Iterator<Item = &'a str>,
 ) -> Option<Result<CliCommand, CliParseError>> {
 	match iter.next() {
-		Some(s) => Some(parse_definite_command(s.trim(), iter)),
+		Some(s) => Some(parse_definite_command(s, iter)),
 		None => None,
 	}
 }
@@ -75,7 +75,7 @@ fn parse_definite_command<'a>(
 ) -> Result<CliCommand, CliParseError> {
 	macro_rules! next_arg {
 		() => {
-			iter.next().ok_or(CliParseError::NotEnoughArgs)?.trim()
+			iter.next().ok_or(CliParseError::NotEnoughArgs)?
 		};
 	}
 
