@@ -84,7 +84,7 @@ fn parse_definite_command<'a>(
             {
                 let ns = next_arg!();
                 ns.parse::<$T>()
-                    .map_err(|_| CliParseError::NotANumber(format!("{}", ns)))
+                    .map_err(|_| CliParseError::NotANumber(format!("{}", ns)))?
             }
 		};
 	}
@@ -94,8 +94,8 @@ fn parse_definite_command<'a>(
     use CliCommand::*;
 	match command_str {
 		"zoom" => match next_arg!() {
-			"set" => Ok(ZoomSet(parse_next_arg!(f32)?)),
-			"change" => Ok(ZoomChange(parse_next_arg!(f32)?)),
+			"set" => Ok(ZoomSet(parse_next_arg!(f32))),
+			"change" => Ok(ZoomChange(parse_next_arg!(f32))),
 			otherwise => Err(CliParseError::UnknownCommand(otherwise.to_owned())),
 		},
 		"clean" => Ok(Clean),
