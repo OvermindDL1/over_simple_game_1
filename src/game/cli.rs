@@ -1,14 +1,25 @@
 use std::io::stdin;
 use std::{sync, thread};
+use structopt::*;
 
 use log::*;
 
 use thiserror::*;
 
+#[derive(StructOpt)]
+#[structopt(setting(clap::AppSettings::NoBinaryName))]
 pub enum CliCommand {
-	ZoomSet(f32),
-	ZoomChange(f32),
-	Clean,
+    Zoom { 
+        #[structopt(subcommand)]
+        sub: EditCommand 
+    },
+    Clean,
+}
+
+#[derive(StructOpt)]
+pub enum EditCommand {
+    Set { amount: f32 },
+    Change { amount: f32 },
 }
 
 #[derive(Debug, Clone, Error)]
@@ -50,16 +61,23 @@ fn cli_thread(out: sync::mpsc::Sender<CliCommand>) -> anyhow::Result<()> {
 			next_line.make_ascii_lowercase();
 			next_line
 		};
-		let mut next_words = next_line.split(' ').map(|s| s.trim()).filter(|s| *s != "");
+		let next_words = next_line.split(' ').map(|s| s.trim()).filter(|s| *s != "");
 
-		while let Some(result) = parse_maybe_command(&mut next_words) {
-			match result {
-				Ok(c) => out.send(c)?,
-				Err(e) => error!("{}", e),
-			}
-		}
+        match CliCommand::from_iter_safe(next_words) {
+            Ok(c) => out.send(c)?,
+            Err(e) => error!("{}", e),
+        }
+
+//		while let Some(result) = parse_maybe_command(&mut next_words) {
+//			match result {
+//				Ok(c) => out.send(c)?,
+//				Err(e) => error!("{}", e),
+//			}
+//		}
 	}
 }
+
+/*
 
 fn parse_maybe_command<'a>(
 	iter: &mut dyn Iterator<Item = &'a str>,
@@ -101,3 +119,5 @@ fn parse_definite_command<'a>(
 		otherwise => Err(CliParseError::UnknownCommand(otherwise.to_owned())),
 	}
 }
+
+*/
