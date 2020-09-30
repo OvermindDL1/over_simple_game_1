@@ -762,12 +762,12 @@ impl GameState {
 		use cli::{CliCommand::*, EditCommand::*};
 		match command {
 			Zoom { sub } => match sub {
-                Set { amount } => {
-                    self.screen_tiles = amount;
-                    self.zoom = amount;
-                }
-                Change { amount } => self.screen_tiles += amount,
-			}
+				Set { amount } => {
+					self.screen_tiles = amount;
+					self.zoom = amount;
+				}
+				Change { amount } => self.screen_tiles += amount,
+			},
 
 			Clean => self.tiles_meshes.clear(),
 		}

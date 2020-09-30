@@ -7,17 +7,17 @@ use log::*;
 #[derive(StructOpt)]
 #[structopt(setting(clap::AppSettings::NoBinaryName))]
 pub enum CliCommand {
-    Zoom { 
-        #[structopt(subcommand)]
-        sub: EditCommand 
-    },
-    Clean,
+	Zoom {
+		#[structopt(subcommand)]
+		sub: EditCommand,
+	},
+	Clean,
 }
 
 #[derive(StructOpt)]
 pub enum EditCommand {
-    Set { amount: f32 },
-    Change { amount: f32 },
+	Set { amount: f32 },
+	Change { amount: f32 },
 }
 
 // returns a JoinHandle but you probably shouldn't join on it because it
@@ -49,9 +49,9 @@ fn cli_thread(out: sync::mpsc::Sender<CliCommand>) -> anyhow::Result<()> {
 		};
 		let next_words = next_line.split(' ').map(|s| s.trim()).filter(|s| *s != "");
 
-        match CliCommand::from_iter_safe(next_words) {
-            Ok(c) => out.send(c)?,
-            Err(e) => error!("{}", e),
-        }
+		match CliCommand::from_iter_safe(next_words) {
+			Ok(c) => out.send(c)?,
+			Err(e) => error!("{}", e),
+		}
 	}
 }
