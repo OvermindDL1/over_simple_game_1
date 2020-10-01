@@ -767,22 +767,24 @@ impl GameState {
 					self.zoom = amount;
 				}
 				Change { amount } => self.screen_tiles += amount,
-                Reset => {
-                    self.screen_tiles = 2f32;
-                    self.zoom = 2f32;
-                }
+				Reset => {
+					self.screen_tiles = 2f32;
+					self.zoom = 2f32;
+				}
 			},
 
-            View { x, y } => {
-                self.view_center.x = x;
-                self.view_center.y = y;
-            },
+			View { x, y } => {
+				self.view_center.x = x;
+				self.view_center.y = y;
+			}
 
 			Clean => self.tiles_meshes.clear(),
 
-            Unit { /* something */ sub } => unimplemented!(),
+			Unit {
+				/* something */ sub,
+			} => unimplemented!(),
 
-            Tile { q, r, sub } => unimplemented!(),
+			Tile { q, r, sub } => unimplemented!(),
 		}
 	}
 
