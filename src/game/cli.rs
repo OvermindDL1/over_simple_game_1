@@ -12,6 +12,8 @@ pub enum CliCommand {
 		sub: EditCommand,
 	},
     View { x: f32, y: f32 },
+
+    #[structopt(visible_alias("clear"))]
 	Clean,
 }
 
