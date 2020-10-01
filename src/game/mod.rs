@@ -773,6 +773,11 @@ impl GameState {
                 }
 			},
 
+            View { x, y } => {
+                self.view_center.x = x;
+                self.view_center.y = y;
+            },
+
 			Clean => self.tiles_meshes.clear(),
 		}
 	}

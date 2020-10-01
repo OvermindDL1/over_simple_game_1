@@ -11,6 +11,7 @@ pub enum CliCommand {
 		#[structopt(subcommand)]
 		sub: EditCommand,
 	},
+    View { x: f32, y: f32 },
 	Clean,
 }
 
