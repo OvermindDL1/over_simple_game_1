@@ -18,6 +18,7 @@ pub enum CliCommand {
 pub enum EditCommand {
 	Set { amount: f32 },
 	Change { amount: f32 },
+    Reset,
 }
 
 // returns a JoinHandle but you probably shouldn't join on it because it

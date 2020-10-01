@@ -767,6 +767,10 @@ impl GameState {
 					self.zoom = amount;
 				}
 				Change { amount } => self.screen_tiles += amount,
+                Reset => {
+                    self.screen_tiles = 2f32;
+                    self.zoom = 2f32;
+                }
 			},
 
 			Clean => self.tiles_meshes.clear(),
