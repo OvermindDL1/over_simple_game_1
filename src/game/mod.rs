@@ -779,6 +779,10 @@ impl GameState {
             },
 
 			Clean => self.tiles_meshes.clear(),
+
+            Unit { /* something */ sub } => unimplemented!(),
+
+            Tile { q, r, sub } => unimplemented!(),
 		}
 	}
 

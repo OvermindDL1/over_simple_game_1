@@ -11,10 +11,26 @@ pub enum CliCommand {
 		#[structopt(subcommand)]
 		sub: EditCommand,
 	},
+
     View { x: f32, y: f32 },
 
     #[structopt(visible_alias("clear"))]
 	Clean,
+
+    Unit {
+        // something here to select which entity
+
+        #[structopt(subcommand)]
+        sub: UnitCommand,
+    },
+
+    Tile {
+        q: u8,
+        r: u8,
+
+        #[structopt(subcommand)]
+        sub: TileCommand,
+    },
 }
 
 #[derive(StructOpt)]
@@ -22,6 +38,17 @@ pub enum EditCommand {
 	Set { amount: f32 },
 	Change { amount: f32 },
     Reset,
+}
+
+#[derive(StructOpt)]
+pub enum UnitCommand {
+    #[structopt(visible_alias("tp"))]
+    Teleport { q: u8, r: u8 },
+}
+
+#[derive(StructOpt)]
+pub enum  TileCommand {
+    Set { tile_type: String }
 }
 
 // returns a JoinHandle but you probably shouldn't join on it because it
