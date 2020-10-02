@@ -252,7 +252,7 @@ impl Game {
 
 	pub fn run_once(&mut self) -> anyhow::Result<()> {
 		while let Ok(cmd) = self.cli_commands.try_recv() {
-			self.state.apply_cli_command(cmd);
+			self.state.apply_cli_command(cmd, &mut self.ecs);
 		}
 		let state = &mut self.state;
 		let ecs = &mut self.ecs;
@@ -758,7 +758,7 @@ impl GameState {
 		Ok(())
 	}
 
-	fn apply_cli_command(&mut self, command: cli::CliCommand) {
+	fn apply_cli_command(&mut self, command: cli::CliCommand, ecs: &mut shipyard::World) {
 		use cli::{CliCommand::*, EditCommand::*};
 		match command {
 			Zoom { sub } => match sub {
@@ -779,6 +779,17 @@ impl GameState {
 			}
 
 			Clean => self.tiles_meshes.clear(),
+
+            List { sub } => match sub {
+                cli::ListCommand::Units => {
+                    ecs.try_run(|units: shipyard::View<MapCoord>| {
+                        for (id, u) in units.iter().with_id() {
+                            println!("id: {:?}, coord: {}", id, u.coord);
+                        }
+                    }).unwrap_or_else(|e| error!("Could not list units. Reason: {}", e));
+                },
+                cli::ListCommand::Tiles => unimplemented!(),
+            },
 
 			Unit {
 				/* something */ sub,

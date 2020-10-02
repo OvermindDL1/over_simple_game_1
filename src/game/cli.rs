@@ -20,6 +20,11 @@ pub enum CliCommand {
 	#[structopt(visible_alias("clear"))]
 	Clean,
 
+    List { 
+        #[structopt(subcommand)]
+        sub: ListCommand
+    },
+
 	Unit {
 		// something here to select which entity
 		#[structopt(subcommand)]
@@ -40,6 +45,12 @@ pub enum EditCommand {
 	Set { amount: f32 },
 	Change { amount: f32 },
 	Reset,
+}
+
+#[derive(StructOpt)]
+pub enum ListCommand {
+    Units,
+    Tiles,
 }
 
 #[derive(StructOpt)]
