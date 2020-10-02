@@ -780,32 +780,30 @@ impl GameState {
 
 			Clean => self.tiles_meshes.clear(),
 
-            List { sub } => match sub {
-                cli::ListCommand::Units => {
-                    ecs.try_run(|units: shipyard::View<MapCoord>| {
-                        for (id, u) in units.iter().with_id() {
-                            println!("id: {:?}, coord: {}", id, u.coord);
-                        }
-                    }).unwrap_or_else(|e| error!("Could not list units. Reason: {}", e));
-                },
-                cli::ListCommand::Tiles => unimplemented!(),
-            },
+			List { sub } => match sub {
+				cli::ListCommand::Units => {
+					ecs.try_run(|units: shipyard::View<MapCoord>| {
+						for (id, u) in units.iter().with_id() {
+							println!("id: {:?}, coord: {}", id, u.coord);
+						}
+					})
+					.unwrap_or_else(|e| error!("Could not list units. Reason: {}", e));
+				}
+				cli::ListCommand::Tiles => unimplemented!(),
+			},
 
-			Unit {
-                index,
-				sub,
-			} => match sub {
-                cli::UnitCommand::Teleport { q, r } => {
-                    ecs.try_run(|mut units: shipyard::ViewMut<MapCoord>| {
-                        match units.try_id_at(index) {
-                            Some(entity) => {
-                                (&mut units).get(entity).unwrap().coord = Coord::new_axial(q, r);
-                            },
-                            None => error!("Index not found"),
-                        }
-                    }).unwrap_or_else(|e| error!("Could not teleport unit. Reason: {}", e))
-                }
-            },
+			Unit { index, sub } => match sub {
+				cli::UnitCommand::Teleport { q, r } => ecs
+					.try_run(|mut units: shipyard::ViewMut<MapCoord>| {
+						match units.try_id_at(index) {
+							Some(entity) => {
+								(&mut units).get(entity).unwrap().coord = Coord::new_axial(q, r);
+							}
+							None => error!("Index not found"),
+						}
+					})
+					.unwrap_or_else(|e| error!("Could not teleport unit. Reason: {}", e)),
+			},
 
 			Tile { q, r, sub } => unimplemented!(),
 		}

@@ -448,9 +448,9 @@ impl Iterator for CoordOrientationNeighborIterator {
 }
 
 impl std::fmt::Display for Coord {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "({}, {})", self.q(), self.r())
-    }
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "({}, {})", self.q(), self.r())
+	}
 }
 
 #[cfg(test)]

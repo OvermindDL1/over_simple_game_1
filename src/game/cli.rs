@@ -20,13 +20,13 @@ pub enum CliCommand {
 	#[structopt(visible_alias("clear"))]
 	Clean,
 
-    List { 
-        #[structopt(subcommand)]
-        sub: ListCommand
-    },
+	List {
+		#[structopt(subcommand)]
+		sub: ListCommand,
+	},
 
 	Unit {
-        index: usize,
+		index: usize,
 
 		#[structopt(subcommand)]
 		sub: UnitCommand,
@@ -50,8 +50,8 @@ pub enum EditCommand {
 
 #[derive(StructOpt)]
 pub enum ListCommand {
-    Units,
-    Tiles,
+	Units,
+	Tiles,
 }
 
 #[derive(StructOpt)]
