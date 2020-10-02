@@ -26,7 +26,8 @@ pub enum CliCommand {
     },
 
 	Unit {
-		// something here to select which entity
+        index: usize,
+
 		#[structopt(subcommand)]
 		sub: UnitCommand,
 	},

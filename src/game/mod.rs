@@ -792,8 +792,20 @@ impl GameState {
             },
 
 			Unit {
-				/* something */ sub,
-			} => unimplemented!(),
+                index,
+				sub,
+			} => match sub {
+                cli::UnitCommand::Teleport { q, r } => {
+                    ecs.try_run(|mut units: shipyard::ViewMut<MapCoord>| {
+                        match units.try_id_at(index) {
+                            Some(entity) => {
+                                (&mut units).get(entity).unwrap().coord = Coord::new_axial(q, r);
+                            },
+                            None => error!("Index not found"),
+                        }
+                    }).unwrap_or_else(|e| error!("Could not teleport unit. Reason: {}", e))
+                }
+            },
 
 			Tile { q, r, sub } => unimplemented!(),
 		}
