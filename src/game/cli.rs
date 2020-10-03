@@ -67,6 +67,7 @@ pub enum TileCommand {
 
 // returns a JoinHandle but you probably shouldn't join on it because it
 // will block forever (or until it errors)
+// TODO: replace join type with anyhow::Result<!> when the feature isn't nightly
 pub fn init_cli_thread() -> (
 	thread::JoinHandle<anyhow::Result<()>>,
 	sync::mpsc::Receiver<CliCommand>,
