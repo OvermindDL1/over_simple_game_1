@@ -252,7 +252,8 @@ impl Game {
 
 	pub fn run_once(&mut self) -> anyhow::Result<()> {
 		while let Ok(cmd) = self.cli_commands.try_recv() {
-			self.state.apply_cli_command(cmd, &mut self.ecs);
+			self.state
+				.apply_cli_command(cmd, &mut self.ecs, &mut self.engine);
 		}
 		let state = &mut self.state;
 		let ecs = &mut self.ecs;
@@ -758,7 +759,12 @@ impl GameState {
 		Ok(())
 	}
 
-	fn apply_cli_command(&mut self, command: cli::CliCommand, ecs: &mut shipyard::World) {
+	fn apply_cli_command(
+		&mut self,
+		command: cli::CliCommand,
+		ecs: &mut shipyard::World,
+		engine: &mut Engine<GameState>,
+	) {
 		use cli::{CliCommand::*, EditCommand::*};
 		match command {
 			Zoom { sub } => match sub {
@@ -797,7 +803,32 @@ impl GameState {
 					.try_run(|mut units: shipyard::ViewMut<MapCoord>| {
 						match units.try_id_at(index) {
 							Some(entity) => {
-								(&mut units).get(entity).unwrap().coord = Coord::new_axial(q, r);
+								let tile_coord = &mut (&mut units).get(entity).unwrap().coord;
+								let tile_map = &mut engine
+									.maps
+									.get_mut(&self.visible_map)
+									.with_context(|| {
+										format!("Unable to load visible map: {}", self.visible_map)
+									})
+									.unwrap();
+								let to_coord = Coord::new_axial(q, r);
+
+								if let Some(tile) = tile_map.get_tile_mut(to_coord) {
+									if !tile.entities.insert(entity) {
+										warn!("You are trying to teleport that unit to where it already is");
+										return;
+									}
+								} else {
+									error!("Cannot teleport to invalid tile");
+								}
+
+								tile_map
+									.get_tile_mut(*tile_coord)
+									.unwrap()
+									.entities
+									.remove(&entity);
+
+								*tile_coord = to_coord;
 							}
 							None => error!("Index not found"),
 						}
