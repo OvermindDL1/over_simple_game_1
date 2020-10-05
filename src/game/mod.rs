@@ -837,32 +837,30 @@ impl GameState {
 			},
 
 			Tile { q, r, sub } => match sub {
-                cli::TileCommand::Set { tile_type } => {
-                    if let Some(new_tile_id) = engine
-                        .tile_types
-                        .tile_types
-                        .get_index_of(&tile_type) {
-
-                        engine
-                            .maps
-                            .get_mut(&self.visible_map)
-                            .unwrap()
-                            .get_tile_mut(Coord::new_axial(q, r))
-                            .map_or_else(|| error!("Not a valid tile"), |tile| {
-                                tile.id = new_tile_id;
-                            });
-                    }
-                    else {
-                        let valid_tile_types: Vec<&String> = engine
-                            .tile_types
-                            .tile_types
-                            .iter()
-                            .map(|kv| kv.0)
-                            .collect();
-                        error!("{} is not a tile type. Valid tile types are:\n{:#?}", tile_type, valid_tile_types);
-                    }
-                }
-            }
+				cli::TileCommand::Set { tile_type } => {
+					if let Some(new_tile_id) = engine.tile_types.tile_types.get_index_of(&tile_type)
+					{
+						engine
+							.maps
+							.get_mut(&self.visible_map)
+							.unwrap()
+							.get_tile_mut(Coord::new_axial(q, r))
+							.map_or_else(
+								|| error!("Not a valid tile"),
+								|tile| {
+									tile.id = new_tile_id;
+								},
+							);
+					} else {
+						let valid_tile_types: Vec<&String> =
+							engine.tile_types.tile_types.iter().map(|kv| kv.0).collect();
+						error!(
+							"{} is not a tile type. Valid tile types are:\n{:#?}",
+							tile_type, valid_tile_types
+						);
+					}
+				}
+			},
 		}
 	}
 
