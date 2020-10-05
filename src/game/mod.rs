@@ -853,7 +853,13 @@ impl GameState {
                             });
                     }
                     else {
-                        error!("{} is not a tile type.", tile_type);
+                        let valid_tile_types: Vec<&String> = engine
+                            .tile_types
+                            .tile_types
+                            .iter()
+                            .map(|kv| kv.0)
+                            .collect();
+                        error!("{} is not a tile type. Valid tile types are:\n{:#?}", tile_type, valid_tile_types);
                     }
                 }
             }
