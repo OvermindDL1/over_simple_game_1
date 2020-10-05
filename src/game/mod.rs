@@ -838,19 +838,23 @@ impl GameState {
 
 			Tile { q, r, sub } => match sub {
                 cli::TileCommand::Set { tile_type } => {
-                    let new_tile_id = engine
+                    if let Some(new_tile_id) = engine
                         .tile_types
                         .tile_types
-                        .get_index_of(&tile_type)
-                        .unwrap();
-                    engine
-                        .maps
-                        .get_mut(&self.visible_map)
-                        .unwrap()
-                        .get_tile_mut(Coord::new_axial(q, r))
-                        .map_or_else(|| error!("Not a valid tile"), |tile| {
-                            tile.id = new_tile_id;
-                        });
+                        .get_index_of(&tile_type) {
+
+                        engine
+                            .maps
+                            .get_mut(&self.visible_map)
+                            .unwrap()
+                            .get_tile_mut(Coord::new_axial(q, r))
+                            .map_or_else(|| error!("Not a valid tile"), |tile| {
+                                tile.id = new_tile_id;
+                            });
+                    }
+                    else {
+                        error!("{} is not a tile type.", tile_type);
+                    }
                 }
             }
 		}
