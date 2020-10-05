@@ -836,7 +836,23 @@ impl GameState {
 					.unwrap_or_else(|e| error!("Could not teleport unit. Reason: {}", e)),
 			},
 
-			Tile { q, r, sub } => unimplemented!(),
+			Tile { q, r, sub } => match sub {
+                cli::TileCommand::Set { tile_type } => {
+                    let new_tile_id = engine
+                        .tile_types
+                        .tile_types
+                        .get_index_of(&tile_type)
+                        .unwrap();
+                    engine
+                        .maps
+                        .get_mut(&self.visible_map)
+                        .unwrap()
+                        .get_tile_mut(Coord::new_axial(q, r))
+                        .map_or_else(|| error!("Not a valid tile"), |tile| {
+                            tile.id = new_tile_id;
+                        });
+                }
+            }
 		}
 	}
 
