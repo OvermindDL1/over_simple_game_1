@@ -151,6 +151,14 @@ impl Coord {
 		Some(Coord::new_axial(q, r))
 	}
 
+	pub fn distance_to(self, other: Coord) -> u8 {
+		let (dx, dy, dz) = (self - other).to_cubic_tuple();
+		std::cmp::max(
+			std::cmp::max(dx.abs() as u8, dy.abs() as u8),
+			dz.abs() as u8,
+		)
+	}
+
 	// pub fn as_coord_orientation(self) -> CoordOrientation {
 	// 	CoordOrientation(self.0, self.1)
 	// }
@@ -294,6 +302,14 @@ impl CoordOrientation {
 		let x = Coord::CENTER_TO_POINT * (Coord::SQRT3 * q + Coord::SQRT3 / 2.0 * r);
 		let y = Coord::CENTER_TO_POINT * (3.0 / 2.0 * r);
 		(x, y)
+	}
+
+	pub fn distance_to(self, other: CoordOrientation) -> u8 {
+		let (dx, dy, dz) = (self - other).to_cubic_tuple();
+		std::cmp::max(
+			std::cmp::max(dx.abs() as u8, dy.abs() as u8),
+			dz.abs() as u8,
+		)
 	}
 
 	pub fn scale(self, scale: i8) -> CoordOrientation {
@@ -521,6 +537,23 @@ mod coord_tests {
 				distance,
 				around
 			);
+		}
+	);
+
+	proptest!(
+		#[test]
+		fn coord_iterator_should_give_equal_dists(
+			coord in rand_coord_strategy(),
+			distance in 0..128u8
+		) {
+			for i in coord.iter_neighbors_ring(distance) {
+				prop_assert_eq!(
+					coord.distance_to(i),
+					distance,
+					"other Coord: {:?}",
+					i
+				);
+			}
 		}
 	);
 
