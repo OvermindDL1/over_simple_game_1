@@ -1,5 +1,5 @@
 use std::fmt::Debug;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use serde::de::DeserializeOwned;
 use serde::Serialize;
@@ -13,7 +13,7 @@ use std::convert::Infallible;
 pub trait EngineIO: Debug + Sized {
 	type ReadError: std::error::Error + Send + Sync;
 	type Read: std::io::Read;
-	fn read(&mut self, file_path: PathBuf) -> Result<Self::Read, Self::ReadError>;
+	fn read(&mut self, file_path: &Path) -> Result<Self::Read, Self::ReadError>;
 
 	type TileInterface: Debug + Serialize + DeserializeOwned;
 	fn blank_tile_interface() -> Self::TileInterface;
@@ -52,8 +52,13 @@ impl EngineIO for DirectFilesystemSimpleIO {
 	type ReadError = std::io::Error;
 	type Read = std::fs::File;
 
-	fn read(&mut self, file_path: PathBuf) -> Result<Self::Read, Self::ReadError> {
-		let mut path = self.0.clone();
+	fn read(&mut self, file_path: &Path) -> Result<Self::Read, Self::ReadError> {
+		// might be overengineering, but path's size can be figured out
+		// early to prevent two allocations. Maybe the compiler already
+		// figured that out. I'm to lazy to check though.
+		let mut path =
+			PathBuf::with_capacity(self.0.as_os_str().len() + file_path.as_os_str().len());
+		path.push(self.0.as_path());
 		path.push(file_path);
 		std::fs::File::open(path)
 	}

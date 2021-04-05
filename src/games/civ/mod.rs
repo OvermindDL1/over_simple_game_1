@@ -32,7 +32,7 @@ impl CivGame {
 		let mut path = self.base_resource_path.clone();
 		path.push("entities");
 		path.push(format!("{}.ron", template));
-		let reader = io.read(path)?;
+		let reader = io.read(path.as_path())?;
 		let components: Vec<Box<dyn ComponentAutoLoadable>> = ron::de::from_reader(reader)
 			.with_context(|| format!("Failed loading component template for: {}", template))?;
 		let entity = all_storages

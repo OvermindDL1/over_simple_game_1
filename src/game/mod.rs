@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::convert::Infallible;
 use std::fmt;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use anyhow::Context as AnyContext;
@@ -121,7 +121,7 @@ impl EngineIO for GameState {
 	type ReadError = GameError;
 	type Read = ggez::filesystem::File;
 
-	fn read(&mut self, file_path: PathBuf) -> Result<Self::Read, Self::ReadError> {
+	fn read(&mut self, file_path: &Path) -> Result<Self::Read, Self::ReadError> {
 		let mut path = PathBuf::from("/");
 		path.push(file_path);
 		ggez::filesystem::open(&mut self.ctx, path)
