@@ -31,6 +31,8 @@ mod atlas;
 
 mod components;
 
+mod cli;
+
 #[derive(Clone, Copy, Debug)]
 enum MapAtlas {}
 
@@ -103,6 +105,7 @@ pub struct Game {
 	engine: Engine<GameState>,
 	civ: CivGame,
 	events_loop: ggez::event::EventsLoop,
+	cli_commands: std::sync::mpsc::Receiver<cli::CliCommand>,
 	// gamepad_enabled: bool,
 }
 
@@ -187,6 +190,7 @@ impl Game {
 		let ecs = shipyard::World::new();
 		let engine = Engine::new();
 		let civ = CivGame::new("/civ");
+		let (_, cli_commands) = cli::init_cli_thread();
 
 		Ok(Game {
 			state,
@@ -194,6 +198,7 @@ impl Game {
 			engine,
 			civ,
 			events_loop,
+			cli_commands,
 			// gamepad_enabled,
 		})
 	}
@@ -246,6 +251,10 @@ impl Game {
 	}
 
 	pub fn run_once(&mut self) -> anyhow::Result<()> {
+		while let Ok(cmd) = self.cli_commands.try_recv() {
+			self.state
+				.apply_cli_command(cmd, &mut self.ecs, &mut self.engine);
+		}
 		let state = &mut self.state;
 		let ecs = &mut self.ecs;
 		let events_loop = &mut self.events_loop;
@@ -748,6 +757,111 @@ impl GameState {
 		}
 		self.mouse_last_position = [screen_x, screen_y].into();
 		Ok(())
+	}
+
+	fn apply_cli_command(
+		&mut self,
+		command: cli::CliCommand,
+		ecs: &mut shipyard::World,
+		engine: &mut Engine<GameState>,
+	) {
+		use cli::{CliCommand::*, EditCommand::*};
+		match command {
+			Zoom { sub } => match sub {
+				Set { amount } => {
+					self.screen_tiles = amount;
+					self.zoom = amount;
+				}
+				Change { amount } => self.screen_tiles += amount,
+				Reset => {
+					self.screen_tiles = 2f32;
+					self.zoom = 2f32;
+				}
+			},
+
+			View { x, y } => {
+				self.view_center.x = x;
+				self.view_center.y = y;
+			}
+
+			Clean => self.tiles_meshes.clear(),
+
+			List { sub } => match sub {
+				cli::ListCommand::Units => {
+					ecs.try_run(|units: shipyard::View<MapCoord>| {
+						for (id, u) in units.iter().with_id() {
+							println!("id: {:?}, coord: {}", id, u.coord);
+						}
+					})
+					.unwrap_or_else(|e| error!("Could not list units. Reason: {}", e));
+				}
+				cli::ListCommand::Tiles => unimplemented!(),
+			},
+
+			Unit { index, sub } => match sub {
+				cli::UnitCommand::Teleport { q, r } => ecs
+					.try_run(|mut units: shipyard::ViewMut<MapCoord>| {
+						match units.try_id_at(index) {
+							Some(entity) => {
+								let tile_coord = &mut (&mut units).get(entity).unwrap().coord;
+								let tile_map = &mut engine
+									.maps
+									.get_mut(&self.visible_map)
+									.with_context(|| {
+										format!("Unable to load visible map: {}", self.visible_map)
+									})
+									.unwrap();
+								let to_coord = Coord::new_axial(q, r);
+
+								if let Some(tile) = tile_map.get_tile_mut(to_coord) {
+									if !tile.entities.insert(entity) {
+										warn!("You are trying to teleport that unit to where it already is");
+										return;
+									}
+								} else {
+									error!("Cannot teleport to invalid tile");
+								}
+
+								tile_map
+									.get_tile_mut(*tile_coord)
+									.unwrap()
+									.entities
+									.remove(&entity);
+
+								*tile_coord = to_coord;
+							}
+							None => error!("Index not found"),
+						}
+					})
+					.unwrap_or_else(|e| error!("Could not teleport unit. Reason: {}", e)),
+			},
+
+			Tile { q, r, sub } => match sub {
+				cli::TileCommand::Set { tile_type } => {
+					if let Some(new_tile_id) = engine.tile_types.tile_types.get_index_of(&tile_type)
+					{
+						engine
+							.maps
+							.get_mut(&self.visible_map)
+							.unwrap()
+							.get_tile_mut(Coord::new_axial(q, r))
+							.map_or_else(
+								|| error!("Not a valid tile"),
+								|tile| {
+									tile.id = new_tile_id;
+								},
+							);
+					} else {
+						let valid_tile_types: Vec<&String> =
+							engine.tile_types.tile_types.iter().map(|kv| kv.0).collect();
+						error!(
+							"{} is not a tile type. Valid tile types are:\n{:#?}",
+							tile_type, valid_tile_types
+						);
+					}
+				}
+			},
+		}
 	}
 
 	fn update(
